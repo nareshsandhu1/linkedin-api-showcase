@@ -19,6 +19,7 @@ const express = require('express');
 const session = require('express-session');
 const SCOPE_CATALOG = require('./lib/scope-catalog');
 const PRODUCT_EXAMPLES = require('./lib/product-examples');
+const ENDPOINT_DEFAULTS = require('./lib/endpoint-defaults');
 const { pool, ensureSchema, hasDatabase } = require('./lib/db');
 const { saveToken, getValidAccessToken } = require('./lib/tokens');
 
@@ -338,10 +339,23 @@ app.get('/products/:slug', (req, res) => {
   }
 
   const example = PRODUCT_EXAMPLES[product.name] || null;
+  const fallbackBody = extractSampleJsonBody(example && example.request);
+  const enrichedEndpoints = product.endpoints.map((ep) => {
+    const key = `${ep.method} ${ep.path}`;
+    const defaults = ENDPOINT_DEFAULTS[key] || {};
+    return {
+      ...ep,
+      tryUrl: defaults.tryUrl || ep.path,
+      tryBody: defaults.tryBody
+        ? JSON.stringify(defaults.tryBody, null, 2)
+        : ep.method !== 'GET'
+        ? fallbackBody
+        : null,
+    };
+  });
   res.render('product-detail', {
-    product,
+    product: { ...product, endpoints: enrichedEndpoints },
     example,
-    sampleBody: extractSampleJsonBody(example && example.request),
     token: req.session.token,
     profile: req.session.profile,
   });
