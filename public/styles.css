@@ -282,4 +282,63 @@ a { color: var(--li-blue); }
   border-color: var(--li-blue);
 }
 
+/* --- Try-it endpoint rows --- */
+.endpoint-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.6rem 0.8rem;
+  align-items: center;
+  padding: 0.55rem 0;
+  border-bottom: 1px dashed var(--border);
+}
+.endpoint-row:last-child { border-bottom: none; }
+.endpoint-row-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.endpoint-url { word-break: break-all; }
+
+.btn-try {
+  background: var(--li-blue);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-try:hover:not(:disabled) { background: var(--li-blue-dark); }
+.btn-try:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.api-result {
+  grid-column: 1 / -1;
+  margin-top: 0.35rem;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.api-result pre {
+  margin-top: 0.5rem;
+  max-height: 360px;
+  overflow: auto;
+}
+.api-result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+.error {
+  color: var(--error);
+  background: #fef0ed;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+}
+
 

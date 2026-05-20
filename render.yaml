@@ -1,13 +1,21 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
 #
-# Deploys this repo as a free Node.js web service. After Render creates the
-# service it will give you a public URL like:
-#   https://linkedin-api-showcase.onrender.com
+# Provisions:
+#   1. A free Postgres database (linkedin-api-showcase-db)
+#   2. A free Node.js web service (linkedin-api-showcase) wired to that DB
 #
-# IMPORTANT: After the first deploy, update LINKEDIN_REDIRECT_URI in the
-# service's Environment tab to the actual onrender.com URL + /auth/linkedin/callback,
-# then add that exact URL to your LinkedIn app's "Authorized redirect URLs"
+# After Render assigns the web service a URL like
+#   https://linkedin-api-showcase.onrender.com
+# update LINKEDIN_REDIRECT_URI in the service's Environment tab to:
+#   https://linkedin-api-showcase.onrender.com/auth/linkedin/callback
+# and add that exact URL to your LinkedIn app's "Authorized redirect URLs"
 # under https://www.linkedin.com/developers/apps.
+
+databases:
+  - name: linkedin-api-showcase-db
+    plan: free
+    databaseName: linkedin_api_showcase
+    user: linkedin_api_showcase
 
 services:
   - type: web
@@ -21,13 +29,19 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: linkedin-api-showcase-db
+          property: connectionString
       - key: LINKEDIN_CLIENT_ID
         sync: false        # set in Render dashboard (kept secret)
       - key: LINKEDIN_CLIENT_SECRET
         sync: false        # set in Render dashboard (kept secret)
       - key: LINKEDIN_REDIRECT_URI
         sync: false        # e.g. https://linkedin-api-showcase.onrender.com/auth/linkedin/callback
+      - key: LINKEDIN_API_VERSION
+        value: "202506"
       - key: LINKEDIN_SCOPES
         value: r_marketing_leadgen_automation r_member_postAnalytics rw_organization_admin r_organization_social_feed w_member_social r_ads r_member_profileAnalytics rw_conversions r_basicprofile r_organization_admin w_member_social_feed r_1st_connections_size rw_offlineConversions r_events_leadgen_automation r_organization_followers r_ads_reporting r_liteprofile r_organization_social w_organization_social rw_ads w_organization_social_feed rw_dmp_segments r_events r_ads_leadgen_automation
       - key: SESSION_SECRET
-        generateValue: true   # Render generates a strong random value
+        generateValue: true

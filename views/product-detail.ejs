@@ -36,13 +36,20 @@
 
     <section class="card">
       <h2>API endpoints</h2>
-      <p class="muted">Calls available with this access token. Use the <code>Authorization: Bearer &lt;token&gt;</code> header (and a <code>LinkedIn-Version</code> header for <code>/rest/*</code> endpoints).</p>
+      <p class="muted">Click <strong>Try it</strong> to call the endpoint live with your access token. Endpoints with placeholders like <code>{urn}</code> will prompt you for a value.</p>
       <ul class="endpoint-list">
-        <% product.endpoints.forEach(function(ep) { %>
-          <li>
-            <span class="http-method http-<%= ep.method.toLowerCase() %>"><%= ep.method %></span>
-            <code><%= ep.path %></code>
-            <span class="ep-label"><%= ep.label %></span>
+        <% product.endpoints.forEach(function(ep, i) { %>
+          <li class="endpoint-row">
+            <div class="endpoint-row-main">
+              <span class="http-method http-<%= ep.method.toLowerCase() %>"><%= ep.method %></span>
+              <code class="endpoint-url"><%= ep.path %></code>
+              <span class="ep-label"><%= ep.label %></span>
+            </div>
+            <button class="btn-try" type="button"
+                    data-method="<%= ep.method %>"
+                    data-url="<%= ep.path %>"
+                    data-target="result-<%= i %>">Try it</button>
+            <div id="result-<%= i %>" class="api-result" hidden></div>
           </li>
         <% }); %>
       </ul>
@@ -58,15 +65,13 @@
         <h2>Example response</h2>
         <pre><%= example.response %></pre>
       </section>
-    <% } else { %>
-      <section class="card">
-        <p class="muted">No example payload is catalogued for this product yet.</p>
-      </section>
     <% } %>
 
     <nav class="topnav" style="margin-top: 1.5rem">
       <a href="/products" class="btn-back">← Back to products</a>
     </nav>
   </main>
+
+  <script src="/app.js" defer></script>
 </body>
 </html>

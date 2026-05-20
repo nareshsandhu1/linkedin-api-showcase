@@ -19,6 +19,8 @@ const express = require('express');
 const session = require('express-session');
 const SCOPE_CATALOG = require('./lib/scope-catalog');
 const PRODUCT_EXAMPLES = require('./lib/product-examples');
+const { pool, ensureSchema, hasDatabase } = require('./lib/db');
+const { saveToken, getValidAccessToken } = require('./lib/tokens');
 
 const {
   LINKEDIN_CLIENT_ID,
@@ -43,17 +45,29 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+app.use(express.json({ limit: '256kb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Use Postgres-backed session store when DATABASE_URL is configured;
+// otherwise fall back to express-session's in-memory store (local dev).
+let sessionStore;
+if (hasDatabase) {
+  const PgSession = require('connect-pg-simple')(session);
+  sessionStore = new PgSession({ pool, tableName: 'session', createTableIfMissing: false });
+}
+
 app.use(
   session({
+    store: sessionStore, // undefined => MemoryStore
     secret: SESSION_SECRET,
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
     cookie: {
       httpOnly: true,
       sameSite: 'lax',
-      secure: IS_PRODUCTION, // requires HTTPS in production
+      secure: IS_PRODUCTION,
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     },
   })
 );
@@ -221,16 +235,34 @@ app.get('/auth/linkedin/callback', async (req, res) => {
     };
 
     // If openid scope was granted, fetch the userinfo immediately for a nicer demo.
+    let profile = null;
     if ((tokenData.scope || '').includes('openid') || (tokenData.scope || '').includes('profile')) {
       try {
         const userRes = await fetch(USERINFO_URL, {
           headers: { Authorization: `Bearer ${tokenData.access_token}` },
         });
         if (userRes.ok) {
-          req.session.profile = await userRes.json();
+          profile = await userRes.json();
+          req.session.profile = profile;
         }
       } catch (_) {
         /* non-fatal */
+      }
+    }
+
+    // Persist the token in Postgres (when configured) keyed by a stable user id.
+    // Use the LinkedIn `sub` from userinfo when available; otherwise fall back
+    // to a per-session UUID so the same browser keeps refreshing the same row.
+    const userId =
+      (profile && profile.sub) ||
+      req.session.userId ||
+      crypto.randomUUID();
+    req.session.userId = userId;
+    if (hasDatabase) {
+      try {
+        await saveToken(userId, tokenData);
+      } catch (e) {
+        console.error('Failed to persist token:', e.message);
       }
     }
 
@@ -317,11 +349,110 @@ app.post('/logout', (req, res) => {
   req.session.destroy(() => res.redirect('/'));
 });
 
-app.listen(PORT, () => {
-  console.log(`LinkedIn API Showcase running at http://localhost:${PORT}`);
-  if (!LINKEDIN_CLIENT_ID || !LINKEDIN_CLIENT_SECRET) {
-    console.warn(
-      '⚠️  LINKEDIN_CLIENT_ID / LINKEDIN_CLIENT_SECRET not set. Copy .env.example to .env and fill them in.'
-    );
+/**
+ * Live API proxy: forwards a request to api.linkedin.com using the user's
+ * persisted access token (auto-refreshed if near expiry). Returns the raw
+ * status + JSON/text body so the UI can render it.
+ *
+ * Body: { method: 'GET'|'POST'|..., url: 'https://api.linkedin.com/...', body?: object|string }
+ */
+app.post('/api/call', async (req, res) => {
+  if (!req.session.token && !req.session.userId) {
+    return res.status(401).json({ error: 'not_authenticated' });
+  }
+
+  const { method = 'GET', url, body } = req.body || {};
+
+  // SSRF guard: only allow LinkedIn hosts.
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return res.status(400).json({ error: 'invalid_url' });
+  }
+  if (parsed.hostname !== 'api.linkedin.com') {
+    return res.status(400).json({ error: 'host_not_allowed', allowed: 'api.linkedin.com' });
+  }
+  if (!['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase())) {
+    return res.status(400).json({ error: 'method_not_allowed' });
+  }
+
+  let accessToken;
+  try {
+    accessToken = await getValidAccessToken(req, {
+      clientId: LINKEDIN_CLIENT_ID,
+      clientSecret: LINKEDIN_CLIENT_SECRET,
+    });
+  } catch (err) {
+    if (err.code === 'NEEDS_REAUTH') {
+      return res.status(401).json({ error: 'needs_reauth', reauthUrl: '/auth/linkedin' });
+    }
+    if (req.session.token && req.session.token.access_token) {
+      // Fall back to the in-session token (no DB).
+      accessToken = req.session.token.access_token;
+    } else {
+      return res.status(401).json({ error: err.code || 'token_unavailable', message: err.message });
+    }
+  }
+
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    'X-Restli-Protocol-Version': '2.0.0',
+  };
+  // Versioned /rest/* endpoints require a LinkedIn-Version header.
+  if (parsed.pathname.startsWith('/rest/')) {
+    headers['LinkedIn-Version'] = process.env.LINKEDIN_API_VERSION || '202506';
+  }
+
+  let fetchBody;
+  if (body !== undefined && body !== null && method.toUpperCase() !== 'GET') {
+    if (typeof body === 'string') {
+      fetchBody = body;
+      if (!headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    } else {
+      fetchBody = JSON.stringify(body);
+      headers['Content-Type'] = 'application/json';
+    }
+  }
+
+  try {
+    const apiRes = await fetch(url, { method: method.toUpperCase(), headers, body: fetchBody });
+    const text = await apiRes.text();
+    let parsedJson = null;
+    try { parsedJson = JSON.parse(text); } catch { /* leave as text */ }
+
+    res.status(200).json({
+      request: { method: method.toUpperCase(), url, headers: { ...headers, Authorization: 'Bearer ***' } },
+      response: {
+        status: apiRes.status,
+        statusText: apiRes.statusText,
+        headers: Object.fromEntries(apiRes.headers.entries()),
+        body: parsedJson !== null ? parsedJson : text,
+      },
+    });
+  } catch (err) {
+    res.status(502).json({ error: 'upstream_error', message: err.message });
   }
 });
+
+(async () => {
+  if (hasDatabase) {
+    try {
+      await ensureSchema();
+      console.log('✅ Postgres connected, schema ready.');
+    } catch (e) {
+      console.error('❌ Postgres bootstrap failed:', e.message);
+    }
+  } else {
+    console.log('ℹ️  No DATABASE_URL set — using in-memory session store. Tokens will not persist across restarts.');
+  }
+
+  app.listen(PORT, () => {
+    console.log(`LinkedIn API Showcase running at http://localhost:${PORT}`);
+    if (!LINKEDIN_CLIENT_ID || !LINKEDIN_CLIENT_SECRET) {
+      console.warn(
+        '⚠️  LINKEDIN_CLIENT_ID / LINKEDIN_CLIENT_SECRET not set. Copy .env.example to .env and fill them in.'
+      );
+    }
+  });
+})();
