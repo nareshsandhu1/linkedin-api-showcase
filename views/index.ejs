@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>LinkedIn API Showcase</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>LinkedIn API Showcase</h1>
+      <p class="subtitle">3-legged OAuth 2.0 (Authorization Code Flow)</p>
+    </header>
+
+    <section class="card">
+      <h2>Step 1 — Sign in with LinkedIn</h2>
+      <p>
+        For security, LinkedIn members enter their credentials directly on
+        <strong>linkedin.com</strong> — never in this app. Clicking the button
+        below will redirect you to LinkedIn's authorization page where you can
+        sign in and approve the requested permissions.
+      </p>
+
+      <ul class="config">
+        <li><strong>Client ID configured:</strong> <%= clientIdConfigured ? '✅ yes' : '❌ no — set LINKEDIN_CLIENT_ID in .env' %></li>
+        <li><strong>Redirect URI:</strong> <code><%= redirectUri %></code></li>
+      </ul>
+
+      <% if (token) { %>
+        <p class="success">You are already authorized. <a href="/profile">View your profile →</a></p>
+        <form method="post" action="/logout" style="display:inline">
+          <button type="submit" class="btn-secondary">Log out</button>
+        </form>
+      <% } else { %>
+        <a href="/auth/linkedin" class="btn-linkedin" <%= clientIdConfigured ? '' : 'aria-disabled=true' %>>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M20.45 20.45h-3.55v-5.57c0-1.33-.02-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56zM22.22 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.72V1.72C24 .77 23.2 0 22.22 0z"/>
+          </svg>
+          Sign in with LinkedIn
+        </a>
+      <% } %>
+    </section>
+
+    <section class="card">
+      <h2>How the flow works</h2>
+      <ol>
+        <li>Your browser is redirected to <code>https://www.linkedin.com/oauth/v2/authorization</code> with your client ID, redirect URI, scopes, and a CSRF <code>state</code> token.</li>
+        <li>You sign in to LinkedIn and approve the permissions.</li>
+        <li>LinkedIn redirects back to <code><%= redirectUri %></code> with a one-time <code>code</code>.</li>
+        <li>This server POSTs <code>code</code> + client secret to <code>/oauth/v2/accessToken</code> to receive an <code>access_token</code>.</li>
+        <li>The token is used to call <code>https://api.linkedin.com/v2/userinfo</code> (OpenID Connect).</li>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>

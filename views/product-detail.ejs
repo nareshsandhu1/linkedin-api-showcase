@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title><%= product.name %> — LinkedIn API Showcase</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="container">
+    <nav class="topnav">
+      <a href="/products" class="btn-back">← Back to products</a>
+    </nav>
+
+    <header>
+      <h1><%= product.name %></h1>
+      <p class="subtitle">
+        <%= product.scopes.length %> granted scope<%= product.scopes.length === 1 ? '' : 's' %> ·
+        <%= product.endpoints.length %> API endpoint<%= product.endpoints.length === 1 ? '' : 's' %>
+        <span class="badge badge-inline">Authorized</span>
+      </p>
+    </header>
+
+    <section class="card">
+      <h2>Scopes</h2>
+      <p class="muted">OAuth permissions LinkedIn granted under this product.</p>
+      <ul class="scope-list">
+        <% product.scopes.forEach(function(s) { %>
+          <li>
+            <code><%= s.name %></code>
+            <span class="ep-label"><%= s.description %></span>
+          </li>
+        <% }); %>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>API endpoints</h2>
+      <p class="muted">Calls available with this access token. Use the <code>Authorization: Bearer &lt;token&gt;</code> header (and a <code>LinkedIn-Version</code> header for <code>/rest/*</code> endpoints).</p>
+      <ul class="endpoint-list">
+        <% product.endpoints.forEach(function(ep) { %>
+          <li>
+            <span class="http-method http-<%= ep.method.toLowerCase() %>"><%= ep.method %></span>
+            <code><%= ep.path %></code>
+            <span class="ep-label"><%= ep.label %></span>
+          </li>
+        <% }); %>
+      </ul>
+    </section>
+
+    <% if (example) { %>
+      <section class="card">
+        <h2>Example request</h2>
+        <pre><%= example.request %></pre>
+      </section>
+
+      <section class="card">
+        <h2>Example response</h2>
+        <pre><%= example.response %></pre>
+      </section>
+    <% } else { %>
+      <section class="card">
+        <p class="muted">No example payload is catalogued for this product yet.</p>
+      </section>
+    <% } %>
+
+    <nav class="topnav" style="margin-top: 1.5rem">
+      <a href="/products" class="btn-back">← Back to products</a>
+    </nav>
+  </main>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Profile — LinkedIn API Showcase</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="container">
+    <nav class="topnav">
+      <a href="/products" class="btn-back">← Back to products</a>
+    </nav>
+
+    <header>
+      <h1>Authorization successful ✅</h1>
+      <p class="subtitle"><a href="/">← Back to home</a></p>
+    </header>
+
+    <% if (profile) { %>
+      <section class="card profile">
+        <% if (profile.picture) { %>
+          <img src="<%= profile.picture %>" alt="Profile picture" class="avatar" />
+        <% } %>
+        <div>
+          <h2><%= profile.name || (profile.given_name + ' ' + (profile.family_name || '')) %></h2>
+          <% if (profile.email) { %><p><strong>Email:</strong> <%= profile.email %> <% if (profile.email_verified) { %>(verified)<% } %></p><% } %>
+          <% if (profile.locale) { %><p><strong>Locale:</strong> <%= (profile.locale.language || profile.locale) %><% if (profile.locale.country) { %>-<%= profile.locale.country %><% } %></p><% } %>
+          <% if (profile.sub) { %><p><strong>LinkedIn member ID (sub):</strong> <code><%= profile.sub %></code></p><% } %>
+        </div>
+      </section>
+    <% } else { %>
+      <section class="card">
+        <p>The granted scopes do not include <code>openid</code>/<code>profile</code>, so no userinfo was fetched.</p>
+      </section>
+    <% } %>
+
+    <section class="card">
+      <h2>Access token</h2>
+      <p class="warn">⚠️ Never expose access tokens in a real production UI. This is for demo purposes only.</p>
+      <dl>
+        <dt>access_token</dt>
+        <dd><code class="truncate"><%= token.access_token %></code></dd>
+        <dt>scope</dt>
+        <dd><code><%= token.scope %></code></dd>
+        <dt>expires_in</dt>
+        <dd><%= token.expires_in %> seconds (≈ <%= Math.round(token.expires_in / 86400) %> days)</dd>
+        <% if (token.refresh_token) { %>
+          <dt>refresh_token</dt>
+          <dd><code class="truncate"><%= token.refresh_token %></code></dd>
+        <% } %>
+      </dl>
+    </section>
+
+    <% if (profile) { %>
+      <section class="card">
+        <h2>Raw <code>/v2/userinfo</code> response</h2>
+        <pre><%= JSON.stringify(profile, null, 2) %></pre>
+      </section>
+    <% } %>
+
+    <form method="post" action="/logout">
+      <button type="submit" class="btn-secondary">Log out</button>
+    </form>
+  </main>
+</body>
+</html>

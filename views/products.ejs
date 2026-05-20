@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>API Products — LinkedIn API Showcase</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="container">
+    <nav class="topnav">
+      <a href="/" class="btn-back">← Home</a>
+    </nav>
+
+    <header>
+      <h1>Authorized API Products</h1>
+      <% if (profile && (profile.name || profile.given_name)) { %>
+        <p class="subtitle">
+          Signed in as <strong><%= profile.name || (profile.given_name + ' ' + (profile.family_name || '')) %></strong>.
+          Pick a product to see its scopes and API endpoints.
+        </p>
+      <% } else { %>
+        <p class="subtitle">Pick a product to see its scopes and API endpoints.</p>
+      <% } %>
+    </header>
+
+    <% if (products.length === 0) { %>
+      <section class="card">
+        <p>No products are authorized for this access token.</p>
+      </section>
+    <% } else { %>
+      <ul class="product-grid">
+        <% products.forEach(function(product) { %>
+          <li>
+            <a class="product-tile" href="/products/<%= product.slug %>">
+              <div class="product-tile-body">
+                <h3><%= product.name %></h3>
+                <p class="product-meta">
+                  <%= product.scopes.length %> scope<%= product.scopes.length === 1 ? '' : 's' %> ·
+                  <%= product.endpoints.length %> endpoint<%= product.endpoints.length === 1 ? '' : 's' %>
+                </p>
+              </div>
+              <span class="product-arrow" aria-hidden="true">→</span>
+            </a>
+          </li>
+        <% }); %>
+      </ul>
+    <% } %>
+
+    <% if (unknownScopes.length > 0) { %>
+      <section class="card">
+        <h3>Other granted scopes</h3>
+        <p class="muted">These scopes were granted but aren’t mapped to a product in this app yet:</p>
+        <ul class="chips">
+          <% unknownScopes.forEach(function(s) { %><li><code><%= s %></code></li><% }); %>
+        </ul>
+      </section>
+    <% } %>
+
+    <section class="card">
+      <h3>Session</h3>
+      <ul>
+        <li><a href="/profile">View raw access token + userinfo response →</a></li>
+        <li><a href="https://www.linkedin.com/developers/apps" target="_blank" rel="noopener">Manage products in the LinkedIn Developer Portal ↗</a></li>
+      </ul>
+      <form method="post" action="/logout" style="margin-top: 1rem">
+        <button type="submit" class="btn-secondary">Log out</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>
