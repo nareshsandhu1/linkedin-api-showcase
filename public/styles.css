@@ -341,4 +341,65 @@ a { color: var(--li-blue); }
   border-radius: 4px;
 }
 
+/* --- Try-it inline editor --- */
+.try-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.try-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.try-url, .try-body {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.5rem 0.6rem;
+  background: #fff;
+  color: var(--text);
+  font-weight: 400;
+}
+.try-body {
+  resize: vertical;
+  min-height: 140px;
+  white-space: pre;
+}
+.try-url:focus, .try-body:focus {
+  outline: 2px solid var(--li-blue);
+  outline-offset: 1px;
+}
+.try-hint {
+  margin: -0.2rem 0 0;
+  font-size: 0.8rem;
+}
+.try-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.btn-cancel {
+  background: #fff;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-cancel:hover { background: #f3f6f9; }
+.try-output {
+  margin-top: 0.75rem;
+}
+.try-output pre {
+  max-height: 360px;
+  overflow: auto;
+}
+
 

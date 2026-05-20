@@ -337,13 +337,47 @@ app.get('/products/:slug', (req, res) => {
     });
   }
 
+  const example = PRODUCT_EXAMPLES[product.name] || null;
   res.render('product-detail', {
     product,
-    example: PRODUCT_EXAMPLES[product.name] || null,
+    example,
+    sampleBody: extractSampleJsonBody(example && example.request),
     token: req.session.token,
     profile: req.session.profile,
   });
 });
+
+/**
+ * Extract the first JSON object/array literal from an example request
+ * string. Returns a re-formatted string, or null if none found.
+ */
+function extractSampleJsonBody(text) {
+  if (!text) return null;
+  const start = text.search(/[\{\[]/);
+  if (start === -1) return null;
+  const open = text[start];
+  const close = open === '{' ? '}' : ']';
+  let depth = 0;
+  let inStr = false;
+  let escape = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (escape) { escape = false; continue; }
+    if (c === '\\') { escape = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === open) depth++;
+    else if (c === close) {
+      depth--;
+      if (depth === 0) {
+        const raw = text.slice(start, i + 1);
+        try { return JSON.stringify(JSON.parse(raw), null, 2); }
+        catch { return raw; }
+      }
+    }
+  }
+  return null;
+}
 
 app.post('/logout', (req, res) => {
   req.session.destroy(() => res.redirect('/'));

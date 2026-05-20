@@ -48,6 +48,7 @@
             <button class="btn-try" type="button"
                     data-method="<%= ep.method %>"
                     data-url="<%= ep.path %>"
+                    <% if (ep.method !== 'GET' && sampleBody) { %>data-sample-body="<%= sampleBody %>"<% } %>
                     data-target="result-<%= i %>">Try it</button>
             <div id="result-<%= i %>" class="api-result" hidden></div>
           </li>
