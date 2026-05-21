@@ -42,6 +42,6 @@ services:
       - key: LINKEDIN_API_VERSION
         value: "202506"
       - key: LINKEDIN_SCOPES
-        value: r_marketing_leadgen_automation r_member_postAnalytics rw_organization_admin r_organization_social_feed w_member_social r_ads r_member_profileAnalytics rw_conversions r_basicprofile r_organization_admin w_member_social_feed r_1st_connections_size rw_offlineConversions r_events_leadgen_automation r_organization_followers r_ads_reporting r_liteprofile r_organization_social w_organization_social rw_ads w_organization_social_feed rw_dmp_segments r_events r_ads_leadgen_automation
+        value: r_marketing_leadgen_automation r_member_postAnalytics rw_organization_admin r_organization_social_feed w_member_social r_ads r_member_profileAnalytics rw_conversions r_basicprofile r_organization_admin w_member_social_feed r_1st_connections_size r_events_leadgen_automation r_organization_followers r_ads_reporting r_liteprofile r_organization_social w_organization_social rw_ads w_organization_social_feed rw_dmp_segments r_events r_ads_leadgen_automation
       - key: SESSION_SECRET
         generateValue: true
