@@ -351,6 +351,7 @@ app.get('/products/:slug', (req, res) => {
         : ep.method !== 'GET'
         ? fallbackBody
         : null,
+      paramSchema: defaults.paramSchema || null,
     };
   });
   res.render('product-detail', {

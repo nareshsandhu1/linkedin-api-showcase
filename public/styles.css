@@ -378,6 +378,72 @@ a { color: var(--li-blue); }
   margin: -0.2rem 0 0;
   font-size: 0.8rem;
 }
+.try-fieldset {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem 0.8rem;
+  margin: 0;
+  background: #fafbfc;
+}
+.try-fieldset > legend {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0 0.35rem;
+  color: var(--text);
+}
+.try-label-inline {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-right: 1rem;
+}
+.try-label-inline input[type="date"] {
+  font-family: inherit;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.35rem 0.5rem;
+  background: #fff;
+  font-weight: 400;
+}
+.try-form select,
+.try-form textarea[data-ftype="urnList"] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.45rem 0.6rem;
+  background: #fff;
+  color: var(--text);
+  font-weight: 400;
+}
+.try-form textarea[data-ftype="urnList"] {
+  resize: vertical;
+  min-height: 48px;
+}
+.try-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.4rem;
+}
+.try-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 400;
+  cursor: pointer;
+}
+.try-checkbox input[type="checkbox"] {
+  margin: 0;
+}
+.try-form-schema .try-url[readonly] {
+  background: #f4f5f7;
+  color: var(--muted);
+}
 .try-actions {
   display: flex;
   gap: 0.5rem;

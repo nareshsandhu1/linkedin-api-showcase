@@ -49,6 +49,7 @@
                     data-method="<%= ep.method %>"
                     data-url="<%= ep.tryUrl %>"
                     <% if (ep.tryBody) { %>data-sample-body="<%= ep.tryBody %>"<% } %>
+                    <% if (ep.paramSchema) { %>data-param-schema="<%= JSON.stringify(ep.paramSchema) %>"<% } %>
                     data-target="result-<%= i %>">Try it</button>
             <div id="result-<%= i %>" class="api-result" hidden></div>
           </li>
