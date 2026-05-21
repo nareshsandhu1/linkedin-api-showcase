@@ -29,6 +29,7 @@
 
       <% if (token) { %>
         <p class="success">You are already authorized. <a href="/profile">View your profile →</a></p>
+        <a href="/products" class="btn-secondary" style="display:inline-block; margin-right:0.5rem;">View products</a>
         <form method="post" action="/logout" style="display:inline">
           <button type="submit" class="btn-secondary">Log out</button>
         </form>
@@ -39,6 +40,7 @@
           </svg>
           Sign in with LinkedIn
         </a>
+        <a href="/products" class="btn-secondary" style="display:inline-block; margin-left:0.5rem;">View products</a>
       <% } %>
     </section>
 
