@@ -95,24 +95,30 @@ function buildGrantedProducts(token) {
   const unknownScopes = [];
 
   for (const scope of grantedScopes) {
-    const entry = SCOPE_CATALOG[scope];
-    if (!entry) {
+    const entries = SCOPE_CATALOG[scope];
+    if (!entries || entries.length === 0) {
       unknownScopes.push(scope);
       continue;
     }
-    const slug = slugify(entry.product);
-    if (!productsBySlug.has(slug)) {
-      productsBySlug.set(slug, {
-        slug,
-        name: entry.product,
-        scopes: [],
-        endpoints: new Map(),
-      });
-    }
-    const product = productsBySlug.get(slug);
-    product.scopes.push({ name: scope, description: entry.description });
-    for (const ep of entry.endpoints) {
-      product.endpoints.set(`${ep.method} ${ep.path}`, ep);
+    for (const entry of entries) {
+      const slug = slugify(entry.product);
+      if (!productsBySlug.has(slug)) {
+        productsBySlug.set(slug, {
+          slug,
+          name: entry.product,
+          scopes: [],
+          endpoints: new Map(),
+        });
+      }
+      const product = productsBySlug.get(slug);
+      // Avoid duplicate scope rows when one scope maps to multiple products
+      // and the same scope is granted multiple times in the token.
+      if (!product.scopes.some((s) => s.name === scope && s.description === entry.description)) {
+        product.scopes.push({ name: scope, description: entry.description });
+      }
+      for (const ep of entry.endpoints) {
+        product.endpoints.set(`${ep.method} ${ep.path}`, ep);
+      }
     }
   }
 

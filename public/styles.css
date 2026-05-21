@@ -444,6 +444,10 @@ a { color: var(--li-blue); }
   background: #f4f5f7;
   color: var(--muted);
 }
+.try-form-schema .try-body[readonly] {
+  background: #f4f5f7;
+  color: var(--muted);
+}
 .try-actions {
   display: flex;
   gap: 0.5rem;

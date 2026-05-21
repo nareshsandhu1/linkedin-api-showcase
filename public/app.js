@@ -51,6 +51,16 @@
           <select id="${id}" data-key="${escape(field.key)}" data-ftype="select">${opts}</select>
         </label>${hint}`;
     }
+    if (field.type === 'number') {
+      const minAttr = field.min != null ? ` min="${field.min}"` : '';
+      const maxAttr = field.max != null ? ` max="${field.max}"` : '';
+      return `
+        <label class="try-label" for="${id}">${escape(field.label)}
+          <input id="${id}" data-key="${escape(field.key)}" data-ftype="number"
+                 type="number"${minAttr}${maxAttr}
+                 value="${escape(field.default != null ? field.default : '')}" />
+        </label>${hint}`;
+    }
     if (field.type === 'dateRange') {
       const d = field.defaults || {};
       return `
@@ -102,6 +112,7 @@
   function buildUrlFromSchema(form, schema) {
     const params = [];
     const errors = [];
+    const facetClauses = [];
 
     function addParam(key, value) {
       if (value === '' || value == null) return;
@@ -114,6 +125,31 @@
       );
       if (!wrap) return;
 
+      // Collect selected values for this field (for facet aggregation).
+      let selected = [];
+      if (field.type === 'urnList') {
+        selected = parseUrnList(wrap.value);
+      } else if (field.type === 'checkboxes') {
+        selected = Array.from(
+          wrap.querySelectorAll('input[type="checkbox"]:checked')
+        ).map((i) => i.value);
+      }
+
+      // Facet fields contribute to a single `targetingCriteria` param instead
+      // of producing their own query parameter.
+      if (field.facetUrn) {
+        if (selected.length === 0) {
+          if (field.required) {
+            errors.push(`${field.label} requires at least one selection`);
+          }
+          return;
+        }
+        facetClauses.push(
+          `(or:(${field.facetUrn}:List(${selected.join(',')})))`
+        );
+        return;
+      }
+
       if (field.type === 'select') {
         addParam(field.key, encodeURIComponent(wrap.value));
       } else if (field.type === 'dateRange') {
@@ -125,41 +161,128 @@
           if (field.required) errors.push(`${field.label} is required`);
           return;
         }
-        // dateRange=(start:(year:Y,month:M,day:D),end:(year:Y,month:M,day:D))
         params.push(`dateRange=(start:${sTuple},end:${eTuple})`);
       } else if (field.type === 'urnList') {
-        const urns = parseUrnList(wrap.value);
-        if (urns.length === 0) return;
-        const list = urns.map((u) => encodeURIComponent(u)).join(',');
-        params.push(`${encodeURIComponent(field.key)}=List(${list})`);
-      } else if (field.type === 'checkboxes') {
-        const checked = Array.from(
-          wrap.querySelectorAll('input[type="checkbox"]:checked')
-        ).map((i) => i.value);
-        if (checked.length === 0) {
-          if (field.required) errors.push(`${field.label} requires at least one selection`);
+        if (selected.length === 0) {
+          if (field.required) errors.push(`${field.label} is required`);
           return;
         }
-        params.push(`${encodeURIComponent(field.key)}=${checked.join(',')}`);
+        const list = selected.map((u) => encodeURIComponent(u)).join(',');
+        params.push(`${encodeURIComponent(field.key)}=List(${list})`);
+      } else if (field.type === 'checkboxes') {
+        if (selected.length === 0) {
+          if (field.required) {
+            errors.push(`${field.label} requires at least one selection`);
+          }
+          return;
+        }
+        params.push(`${encodeURIComponent(field.key)}=${selected.join(',')}`);
       } else {
         addParam(field.key, encodeURIComponent(wrap.value));
       }
     });
 
+    if (facetClauses.length) {
+      params.push(
+        `targetingCriteria=(include:(and:List(${facetClauses.join(',')})))`
+      );
+    }
+
     return { url: `${schema.baseUrl}?${params.join('&')}`, errors };
   }
 
+  // ---- POST body builders ----------------------------------------------
+
+  function readFieldSelections(form, field) {
+    const wrap = form.querySelector(
+      `[data-key="${field.key}"][data-ftype]`
+    );
+    if (!wrap) return null;
+    if (field.type === 'urnList') return parseUrnList(wrap.value);
+    if (field.type === 'checkboxes') {
+      return Array.from(
+        wrap.querySelectorAll('input[type="checkbox"]:checked')
+      ).map((i) => i.value);
+    }
+    if (field.type === 'number') {
+      const v = wrap.value === '' ? null : Number(wrap.value);
+      return Number.isFinite(v) ? v : null;
+    }
+    return wrap.value;
+  }
+
+  function buildAudienceInsightsBody(form, schema) {
+    const errors = [];
+    const request = {
+      requestMetaData: {},
+      targetingCriteria: { include: { and: [] } },
+    };
+    const excludeOr = {};
+
+    schema.fields.forEach((field) => {
+      const value = readFieldSelections(form, field);
+
+      // Facet fields → targetingCriteria.include.and (or .exclude.or).
+      if (field.facetUrn) {
+        const list = Array.isArray(value) ? value : [];
+        if (list.length === 0) {
+          if (field.required) errors.push(`${field.label} requires a value`);
+          return;
+        }
+        request.targetingCriteria.include.and.push({
+          or: { [field.facetUrn]: list },
+        });
+        return;
+      }
+
+      // Top-level / metadata fields.
+      if (field.location === 'metadata') {
+        if (value === null || value === '' || value === undefined) {
+          if (field.required) errors.push(`${field.label} is required`);
+          return;
+        }
+        request.requestMetaData[field.key] = value;
+        return;
+      }
+      if (value === null || value === '' || value === undefined) {
+        if (field.required) errors.push(`${field.label} is required`);
+        return;
+      }
+      request[field.key] = value;
+    });
+
+    if (Object.keys(excludeOr).length) {
+      request.targetingCriteria.exclude = { or: excludeOr };
+    }
+
+    return { body: { request }, errors };
+  }
+
   function renderSchemaForm(target, method, schema) {
+    const isPost =
+      (schema.httpMethod || method).toUpperCase() !== 'GET' && schema.bodyShape;
+    const httpMethod = (schema.httpMethod || method).toUpperCase();
     const fieldsHtml = schema.fields.map(renderSchemaField).join('');
     target.innerHTML = `
       <form class="try-form try-form-schema">
         ${schema.description ? `<p class="muted">${escape(schema.description)}</p>` : ''}
         ${fieldsHtml}
-        <label class="try-label">Built request URL (read-only)
-          <input type="text" class="try-url" readonly spellcheck="false" />
+        <label class="try-label">${
+          isPost ? 'Built request body (read-only preview)' : 'Built request URL (read-only)'
+        }
+          ${
+            isPost
+              ? '<textarea class="try-body try-body-preview" rows="10" readonly spellcheck="false"></textarea>'
+              : '<input type="text" class="try-url" readonly spellcheck="false" />'
+          }
         </label>
+        ${
+          isPost
+            ? `<p class="muted try-hint">POST <code>${escape(schema.baseUrl)}</code></p>`
+            : ''
+        }
         <div class="try-actions">
-          <button type="submit" class="btn-try">Send ${escape(method)} request</button>
+          <button type="submit" class="btn-try">Send ${escape(httpMethod)} request</button>
           <button type="button" class="btn-cancel">Cancel</button>
         </div>
       </form>
@@ -169,14 +292,20 @@
     const form = target.querySelector('.try-form');
     const output = target.querySelector('.try-output');
     const urlInput = form.querySelector('.try-url');
+    const bodyPreview = form.querySelector('.try-body-preview');
 
-    function refreshUrl() {
-      const { url } = buildUrlFromSchema(form, schema);
-      urlInput.value = url;
+    function refresh() {
+      if (isPost) {
+        const built = buildSchemaPayload(form, schema);
+        bodyPreview.value = JSON.stringify(built.body, null, 2);
+      } else {
+        const { url } = buildUrlFromSchema(form, schema);
+        urlInput.value = url;
+      }
     }
-    refreshUrl();
-    form.addEventListener('input', refreshUrl);
-    form.addEventListener('change', refreshUrl);
+    refresh();
+    form.addEventListener('input', refresh);
+    form.addEventListener('change', refresh);
 
     target.querySelector('.btn-cancel').addEventListener('click', () => {
       target.hidden = true;
@@ -186,10 +315,22 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const submitBtn = form.querySelector('button[type="submit"]');
-      const built = buildUrlFromSchema(form, schema);
-      if (built.errors.length) {
-        output.innerHTML = `<p class="error">${escape(built.errors.join('; '))}</p>`;
-        return;
+
+      let payload;
+      if (isPost) {
+        const built = buildSchemaPayload(form, schema);
+        if (built.errors.length) {
+          output.innerHTML = `<p class="error">${escape(built.errors.join('; '))}</p>`;
+          return;
+        }
+        payload = { method: httpMethod, url: schema.baseUrl, body: built.body };
+      } else {
+        const built = buildUrlFromSchema(form, schema);
+        if (built.errors.length) {
+          output.innerHTML = `<p class="error">${escape(built.errors.join('; '))}</p>`;
+          return;
+        }
+        payload = { method: httpMethod, url: built.url };
       }
 
       submitBtn.disabled = true;
@@ -198,7 +339,7 @@
         const res = await fetch('/api/call', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ method, url: built.url }),
+          body: JSON.stringify(payload),
         });
         const data = await res.json();
         renderApiResult(output, res, data);
@@ -208,6 +349,13 @@
         submitBtn.disabled = false;
       }
     });
+  }
+
+  function buildSchemaPayload(form, schema) {
+    if (schema.bodyShape === 'audienceInsights') {
+      return buildAudienceInsightsBody(form, schema);
+    }
+    return { body: {}, errors: ['Unknown bodyShape: ' + schema.bodyShape] };
   }
 
   // -- Generic free-form editor --------------------------------------------
