@@ -36,7 +36,7 @@
 
     <section class="card">
       <h2>API endpoints</h2>
-      <p class="muted">Click <strong>Try it</strong> to call the endpoint live with your access token. Endpoints with placeholders like <code>{urn}</code> will prompt you for a value.</p>
+      <p class="muted">Click <strong>Try it</strong> to test an endpoint. Where LinkedIn needs an identifier, the form asks for the simple ID and fills in the full LinkedIn format for you.</p>
       <ul class="endpoint-list">
         <% product.endpoints.forEach(function(ep, i) { %>
           <li class="endpoint-row">
@@ -48,6 +48,7 @@
             <button class="btn-try" type="button"
                     data-method="<%= ep.method %>"
                     data-url="<%= ep.tryUrl %>"
+                  data-url-template="<%= ep.path %>"
                     <% if (ep.tryBody) { %>data-sample-body="<%= ep.tryBody %>"<% } %>
                     <% if (ep.paramSchema) { %>data-param-schema="<%= JSON.stringify(ep.paramSchema) %>"<% } %>
                     data-target="result-<%= i %>">Try it</button>
