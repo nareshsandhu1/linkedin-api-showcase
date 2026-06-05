@@ -298,6 +298,7 @@
         var payload = {
           event: $('event-name').value.trim() || 'capi_test_click',
           event_id: $('event-id').value.trim() || crypto.randomUUID(),
+          click_id: getLiFatId(),
           value: parseFloat($('event-value').value) || 0,
           currency: $('event-currency').value.trim() || 'USD',
           user_data: {
@@ -346,6 +347,21 @@
       var params = new URLSearchParams(location.search);
       if (params.get('gtm')) $('gtm-id').value = params.get('gtm');
       if (params.get('server')) $('gtm-server').value = params.get('server');
+
+      // Ensure the landing URL carries an li_fat_id. Generate a random
+      // numeric id if one isn't already present, and update the URL in
+      // place (no reload) so the value is visible and copyable.
+      function getLiFatId() {
+        var qs = new URLSearchParams(location.search);
+        var existing = qs.get('li_fat_id');
+        if (existing) return existing;
+        var generated = String(Math.floor(Math.random() * 1e16));
+        qs.set('li_fat_id', generated);
+        var newUrl = location.pathname + '?' + qs.toString() + location.hash;
+        history.replaceState(null, '', newUrl);
+        return generated;
+      }
+      getLiFatId();
 
       // Container is hardcoded, so always load GTM on page load.
       loadGTM();
