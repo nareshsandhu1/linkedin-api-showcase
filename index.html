@@ -315,6 +315,12 @@
       var params = new URLSearchParams(location.search);
       if (params.get('gtm')) $('gtm-id').value = params.get('gtm');
       if (params.get('server')) $('gtm-server').value = params.get('server');
+
+      // Auto-load GTM when arriving from Tag Assistant Preview (which appends
+      // gtm_debug / gtm_auth / gtm_preview) or when ?gtm= is supplied directly.
+      if (params.get('gtm') || params.get('gtm_debug') || params.get('gtm_preview')) {
+        loadGTM();
+      }
     })();
   </script>
 </body>
