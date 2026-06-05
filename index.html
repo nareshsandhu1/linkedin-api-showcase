@@ -251,16 +251,47 @@
         script.async = true;
         var base = serverUrl ? serverUrl.replace(/\/$/, '') : 'https://www.googletagmanager.com';
         script.src = base + '/gtm.js?id=' + encodeURIComponent(id);
-        script.onload = function () {
+
+        var settled = false;
+        function markLoaded(source) {
+          if (settled) return;
+          settled = true;
           gtmLoaded = true;
           loadedId = id;
-          setStatus(loadStatus, 'Loaded ' + id, 'ok');
-        };
+          setStatus(loadStatus, 'Loaded ' + id + ' (' + source + ')', 'ok');
+        }
+        function markFailed(reason) {
+          if (settled) return;
+          if (window.google_tag_manager && window.google_tag_manager[id]) {
+            markLoaded('detected');
+            return;
+          }
+          settled = true;
+          setStatus(loadStatus, 'Failed to load ' + id + ' — ' + reason, 'err');
+        }
+
+        script.onload = function () { markLoaded('script'); };
         script.onerror = function () {
-          setStatus(loadStatus, 'Failed to load ' + script.src, 'err');
+          // Script tag may be blocked by an extension while Tag Assistant /
+          // another loader still injects the container. Re-check the global.
+          setTimeout(function () { markFailed('script onerror'); }, 600);
         };
         document.head.appendChild(script);
         setStatus(loadStatus, 'Loading ' + id + '…');
+
+        // Poll for the GTM global as a fallback (handles blocked script tags
+        // when GTM is injected by Tag Assistant or another mechanism).
+        var pollStart = Date.now();
+        var pollId = setInterval(function () {
+          if (settled) { clearInterval(pollId); return; }
+          if (window.google_tag_manager && window.google_tag_manager[id]) {
+            clearInterval(pollId);
+            markLoaded('global');
+          } else if (Date.now() - pollStart > 5000) {
+            clearInterval(pollId);
+            markFailed('timeout waiting for google_tag_manager');
+          }
+        }, 250);
       }
 
       function buildPayload() {
