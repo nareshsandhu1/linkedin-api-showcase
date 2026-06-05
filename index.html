@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GTM CAPI Test Harness</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-dark: #0284c7;
+      --success: #4ade80;
+      --error: #f87171;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    main {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+    h1 { margin: 0 0 0.25rem; }
+    .subtitle { color: var(--muted); margin: 0 0 2rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .card h2 {
+      margin: 0 0 0.75rem;
+      font-size: 1.05rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 0.35rem; }
+    input[type="text"], select, textarea {
+      width: 100%;
+      background: #0b1220;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.55rem 0.7rem;
+      font-family: inherit;
+      font-size: 0.95rem;
+    }
+    textarea { font-family: ui-monospace, Menlo, monospace; font-size: 0.85rem; min-height: 110px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; margin-bottom: 0.85rem; }
+    .row-single { margin-bottom: 0.85rem; }
+    button {
+      background: var(--accent);
+      color: #082f49;
+      border: none;
+      border-radius: 6px;
+      padding: 0.7rem 1.2rem;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    button:hover { background: var(--accent-dark); color: #fff; }
+    button.secondary {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+    .fire-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .status.ok { color: var(--success); }
+    .status.err { color: var(--error); }
+    pre {
+      margin: 0;
+      background: #0b1220;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.85rem 1rem;
+      max-height: 320px;
+      overflow: auto;
+      font-size: 0.82rem;
+      color: var(--text);
+    }
+    .log-entry { border-bottom: 1px dashed var(--border); padding: 0.4rem 0; }
+    .log-entry:last-child { border-bottom: none; }
+    .log-time { color: var(--muted); font-size: 0.78rem; }
+    .muted { color: var(--muted); font-size: 0.85rem; }
+    code { background: #0b1220; padding: 0.05rem 0.35rem; border-radius: 4px; font-size: 0.85em; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>GTM CAPI test harness</h1>
+    <p class="subtitle">
+      Loads Google Tag Manager on demand and pushes a custom event to the
+      <code>dataLayer</code> so server-side / Conversion API tags can fire on a click.
+    </p>
+
+    <section class="card">
+      <h2>1. Container</h2>
+      <div class="row">
+        <div>
+          <label for="gtm-id">GTM container ID</label>
+          <input id="gtm-id" type="text" placeholder="GTM-XXXXXXX" />
+        </div>
+        <div>
+          <label for="gtm-server">Custom server container URL (optional)</label>
+          <input id="gtm-server" type="text" placeholder="https://sgtm.example.com" />
+        </div>
+      </div>
+      <div class="fire-row">
+        <button id="load-gtm">Load GTM</button>
+        <span id="load-status" class="status">Not loaded</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>2. Event payload</h2>
+      <div class="row">
+        <div>
+          <label for="event-name">Event name</label>
+          <input id="event-name" type="text" value="capi_test_click" />
+        </div>
+        <div>
+          <label for="event-value">Conversion value</label>
+          <input id="event-value" type="text" value="1.00" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="event-currency">Currency</label>
+          <input id="event-currency" type="text" value="USD" />
+        </div>
+        <div>
+          <label for="event-id">Event ID (dedupe key)</label>
+          <input id="event-id" type="text" placeholder="auto-generated per click" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="user-email">User email (hashed by GTM template)</label>
+          <input id="user-email" type="text" placeholder="test@example.com" />
+        </div>
+        <div>
+          <label for="user-phone">User phone</label>
+          <input id="user-phone" type="text" placeholder="+15555550100" />
+        </div>
+      </div>
+      <div class="row-single">
+        <label for="extra-json">Extra dataLayer fields (JSON, merged into push)</label>
+        <textarea id="extra-json" spellcheck="false">{
+  "items": [
+    { "item_id": "SKU_123", "item_name": "Test product", "quantity": 1, "price": 1.00 }
+  ]
+}</textarea>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>3. Fire</h2>
+      <div class="fire-row">
+        <button id="fire-event">Click to fire tag</button>
+        <button id="clear-log" class="secondary">Clear log</button>
+        <span id="fire-status" class="status">Idle</span>
+      </div>
+      <p class="muted" style="margin-top: 0.85rem;">
+        Open GTM Preview (Tag Assistant) before clicking to see the tag fire in real time.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>4. dataLayer log</h2>
+      <div id="log"><p class="muted">No events fired yet.</p></div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var gtmLoaded = false;
+      var loadedId = null;
+
+      var $ = function (id) { return document.getElementById(id); };
+      var logEl = $('log');
+      var loadStatus = $('load-status');
+      var fireStatus = $('fire-status');
+
+      window.dataLayer = window.dataLayer || [];
+
+      function setStatus(el, text, type) {
+        el.textContent = text;
+        el.classList.remove('ok', 'err');
+        if (type) el.classList.add(type);
+      }
+
+      function logEvent(payload) {
+        if (logEl.querySelector('.muted')) logEl.innerHTML = '';
+        var entry = document.createElement('div');
+        entry.className = 'log-entry';
+        var time = new Date().toLocaleTimeString();
+        entry.innerHTML =
+          '<div class="log-time">' + time + '</div>' +
+          '<pre>' + escapeHtml(JSON.stringify(payload, null, 2)) + '</pre>';
+        logEl.prepend(entry);
+      }
+
+      function escapeHtml(s) {
+        return s.replace(/[&<>]/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c];
+        });
+      }
+
+      function loadGTM() {
+        var id = $('gtm-id').value.trim();
+        var serverUrl = $('gtm-server').value.trim();
+        if (!/^GTM-[A-Z0-9]+$/i.test(id)) {
+          setStatus(loadStatus, 'Enter a valid GTM-XXXXXXX id', 'err');
+          return;
+        }
+        if (gtmLoaded && loadedId === id) {
+          setStatus(loadStatus, 'Already loaded: ' + id, 'ok');
+          return;
+        }
+        if (gtmLoaded) {
+          setStatus(loadStatus, 'Reload the page to switch containers', 'err');
+          return;
+        }
+
+        window.dataLayer.push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
+        var script = document.createElement('script');
+        script.async = true;
+        var base = serverUrl ? serverUrl.replace(/\/$/, '') : 'https://www.googletagmanager.com';
+        script.src = base + '/gtm.js?id=' + encodeURIComponent(id);
+        script.onload = function () {
+          gtmLoaded = true;
+          loadedId = id;
+          setStatus(loadStatus, 'Loaded ' + id, 'ok');
+        };
+        script.onerror = function () {
+          setStatus(loadStatus, 'Failed to load ' + script.src, 'err');
+        };
+        document.head.appendChild(script);
+        setStatus(loadStatus, 'Loading ' + id + '…');
+      }
+
+      function buildPayload() {
+        var payload = {
+          event: $('event-name').value.trim() || 'capi_test_click',
+          event_id: $('event-id').value.trim() || crypto.randomUUID(),
+          value: parseFloat($('event-value').value) || 0,
+          currency: $('event-currency').value.trim() || 'USD',
+          user_data: {
+            email: $('user-email').value.trim() || undefined,
+            phone: $('user-phone').value.trim() || undefined,
+          },
+          page_location: window.location.href,
+          page_referrer: document.referrer || undefined,
+          timestamp: new Date().toISOString(),
+        };
+
+        var extra = $('extra-json').value.trim();
+        if (extra) {
+          try {
+            var parsed = JSON.parse(extra);
+            Object.assign(payload, parsed);
+          } catch (e) {
+            setStatus(fireStatus, 'Extra JSON invalid: ' + e.message, 'err');
+            return null;
+          }
+        }
+        return payload;
+      }
+
+      $('load-gtm').addEventListener('click', loadGTM);
+
+      $('fire-event').addEventListener('click', function () {
+        var payload = buildPayload();
+        if (!payload) return;
+
+        window.dataLayer.push(payload);
+        logEvent(payload);
+
+        if (!gtmLoaded) {
+          setStatus(fireStatus, 'Pushed (GTM not loaded — load container to fire tags)', 'err');
+        } else {
+          setStatus(fireStatus, 'Pushed ' + payload.event + ' (' + payload.event_id + ')', 'ok');
+        }
+      });
+
+      $('clear-log').addEventListener('click', function () {
+        logEl.innerHTML = '<p class="muted">No events fired yet.</p>';
+        setStatus(fireStatus, 'Idle');
+      });
+
+      var params = new URLSearchParams(location.search);
+      if (params.get('gtm')) $('gtm-id').value = params.get('gtm');
+      if (params.get('server')) $('gtm-server').value = params.get('server');
+    })();
+  </script>
+</body>
+</html>
