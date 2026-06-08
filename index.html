@@ -297,13 +297,15 @@
       function buildPayload() {
         var payload = {
           event: $('event-name').value.trim() || 'li_conversion_26604276',
+          conversion_rule_id: 26604276,
+          conversion_happened_at: Date.now(),
           event_id: $('event-id').value.trim() || crypto.randomUUID(),
-          click_id: getLiFatId(),
           value: parseFloat($('event-value').value) || 0,
           currency: $('event-currency').value.trim() || 'USD',
           user_data: {
             email: $('user-email').value.trim() || undefined,
             phone: $('user-phone').value.trim() || undefined,
+            li_fat_id: getLiFatId(),
           },
           page_location: window.location.href,
           page_referrer: document.referrer || undefined,
