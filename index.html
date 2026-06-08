@@ -140,7 +140,7 @@
       <div class="row">
         <div>
           <label for="event-name">Event name</label>
-          <input id="event-name" type="text" value="li_conversion_26604228" />
+          <input id="event-name" type="text" value="li_conversion_26604276" />
         </div>
         <div>
           <label for="event-value">Conversion value</label>
@@ -296,7 +296,7 @@
 
       function buildPayload() {
         var payload = {
-          event: $('event-name').value.trim() || 'li_conversion_26604228',
+          event: $('event-name').value.trim() || 'li_conversion_26604276',
           event_id: $('event-id').value.trim() || crypto.randomUUID(),
           click_id: getLiFatId(),
           value: parseFloat($('event-value').value) || 0,
