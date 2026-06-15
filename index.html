@@ -122,7 +122,7 @@
       <div class="row">
         <div>
           <label for="gtm-id">GTM container ID</label>
-          <input id="gtm-id" type="text" value="GTM-TRQVKJVZ" placeholder="GTM-XXXXXXX" />
+          <input id="gtm-id" type="text" value="" placeholder="GTM-XXXXXXX" autocomplete="off" />
         </div>
         <div>
           <label for="gtm-server">Custom server container URL (optional)</label>
@@ -346,6 +346,11 @@
         setStatus(fireStatus, 'Idle');
       });
 
+      // Always clear the container input on load (defeats browser autofill /
+      // bfcache restoring a prior value) unless one is passed in the URL.
+      $('gtm-id').value = '';
+      window.addEventListener('pageshow', function () { $('gtm-id').value = ''; });
+
       var params = new URLSearchParams(location.search);
       if (params.get('gtm')) $('gtm-id').value = params.get('gtm');
       if (params.get('server')) $('gtm-server').value = params.get('server');
@@ -364,9 +369,6 @@
         return generated;
       }
       getLiFatId();
-
-      // Container is hardcoded, so always load GTM on page load.
-      loadGTM();
     })();
   </script>
 </body>
