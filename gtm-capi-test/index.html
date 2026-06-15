@@ -346,6 +346,11 @@
         setStatus(fireStatus, 'Idle');
       });
 
+      // Always clear the container input on load (defeats browser autofill /
+      // bfcache restoring a prior value) unless one is passed in the URL.
+      $('gtm-id').value = '';
+      window.addEventListener('pageshow', function () { $('gtm-id').value = ''; });
+
       var params = new URLSearchParams(location.search);
       if (params.get('gtm')) $('gtm-id').value = params.get('gtm');
       if (params.get('server')) $('gtm-server').value = params.get('server');
