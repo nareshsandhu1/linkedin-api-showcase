@@ -119,20 +119,22 @@
 
     <section class="card">
       <h2>1. Container</h2>
+      <form autocomplete="off" onsubmit="return false;">
       <div class="row">
         <div>
           <label for="gtm-id">GTM container ID</label>
-          <input id="gtm-id" type="text" value="" placeholder="GTM-XXXXXXX" autocomplete="off" />
+          <input id="gtm-id" type="text" value="" placeholder="GTM-XXXXXXX" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" name="gtm-id-no-fill" />
         </div>
         <div>
           <label for="gtm-server">Custom server container URL (optional)</label>
-          <input id="gtm-server" type="text" placeholder="https://sgtm.example.com" />
+          <input id="gtm-server" type="text" placeholder="https://sgtm.example.com" autocomplete="off" name="gtm-server-no-fill" />
         </div>
       </div>
       <div class="fire-row">
         <button id="load-gtm">Load GTM</button>
         <span id="load-status" class="status">Not loaded</span>
       </div>
+      </form>
     </section>
 
     <section class="card">
@@ -348,10 +350,19 @@
 
       // Always clear the container input on load (defeats browser autofill /
       // bfcache restoring a prior value) unless one is passed in the URL.
-      $('gtm-id').value = '';
-      window.addEventListener('pageshow', function () { $('gtm-id').value = ''; });
-
+      function clearContainerInputs() {
+        if (!params.get('gtm')) $('gtm-id').value = '';
+        if (!params.get('server')) $('gtm-server').value = '';
+      }
       var params = new URLSearchParams(location.search);
+      clearContainerInputs();
+      // Re-clear after the browser has had a chance to autofill (Chrome
+      // often fills inputs ~0-200ms after DOMContentLoaded).
+      setTimeout(clearContainerInputs, 0);
+      setTimeout(clearContainerInputs, 250);
+      setTimeout(clearContainerInputs, 1000);
+      window.addEventListener('pageshow', clearContainerInputs);
+
       if (params.get('gtm')) $('gtm-id').value = params.get('gtm');
       if (params.get('server')) $('gtm-server').value = params.get('server');
 
