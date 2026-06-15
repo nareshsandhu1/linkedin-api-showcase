@@ -122,7 +122,7 @@
       <div class="row">
         <div>
           <label for="gtm-id">GTM container ID</label>
-          <input id="gtm-id" type="text" value="GTM-TRQVKJVZ" placeholder="GTM-XXXXXXX" />
+          <input id="gtm-id" type="text" value="" placeholder="GTM-XXXXXXX" autocomplete="off" />
         </div>
         <div>
           <label for="gtm-server">Custom server container URL (optional)</label>
@@ -364,9 +364,6 @@
         return generated;
       }
       getLiFatId();
-
-      // Container is hardcoded, so always load GTM on page load.
-      loadGTM();
     })();
   </script>
 </body>
