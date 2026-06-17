@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Darwin Dashboard — LinkedIn CAPI Health</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Darwin Dashboard</h1>
+      <p class="subtitle">LinkedIn CAPI integration health &amp; recommendations</p>
+    </header>
+
+    <% if (advertisers.length === 0) { %>
+      <section class="card empty-state">
+        <p class="muted">No advertisers are available yet. Configure a <code>DATABASE_URL</code> and run the ingestion job, or start the app without a database to load the demo advertiser.</p>
+      </section>
+    <% } else { %>
+      <ul class="advertiser-grid">
+        <% advertisers.forEach(function(adv) { %>
+          <li>
+            <a class="advertiser-tile" href="/dashboard/<%= adv.advertiser_id %>">
+              <div class="advertiser-tile-body">
+                <h3><%= adv.advertiser_name %></h3>
+                <p class="advertiser-meta">Account <code><%= adv.external_account_id || adv.advertiser_id %></code></p>
+              </div>
+              <span class="tile-arrow" aria-hidden="true">→</span>
+            </a>
+          </li>
+        <% }); %>
+      </ul>
+    <% } %>
+  </main>
+</body>
+</html>

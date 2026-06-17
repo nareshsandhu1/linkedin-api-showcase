@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title><%= advertiser.advertiser_name %> — Darwin Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="container container-wide">
+
+    <!-- ── Top nav ──────────────────────────────────────────────────── -->
+    <nav class="topnav topnav-split">
+      <a href="/" class="btn-back">← All advertisers</a>
+      <span class="window-badge">Last 30 days</span>
+    </nav>
+
+    <!-- ── Page header ───────────────────────────────────────────────── -->
+    <header class="page-header">
+      <div>
+        <h1><%= advertiser.advertiser_name %></h1>
+        <p class="subtitle">
+          Account&nbsp;<code><%= advertiser.external_account_id || advertiser.advertiser_id %></code>
+          <% if (isStale) { %>
+            &nbsp;<span class="stale-badge">⚠ Data may be stale</span>
+          <% } %>
+        </p>
+      </div>
+      <% if (hasData) { %>
+        <div class="score-badge score-grade-<%= scoringResult.grade %>">
+          <span class="score-number"><%= scoringResult.score %></span>
+          <span class="score-label">/ 100</span>
+          <span class="score-grade">Grade&nbsp;<%= scoringResult.grade %></span>
+        </div>
+      <% } %>
+    </header>
+
+    <!-- ── No data state ─────────────────────────────────────────────── -->
+    <% if (!hasData) { %>
+      <section class="card empty-state">
+        <h2>No CAPI data available</h2>
+        <p class="muted">No snapshots have been ingested for this advertiser yet. Run the ingestion job or configure <code>DATABASE_URL</code> to load real data.</p>
+      </section>
+    <% } else { %>
+
+    <!-- ── 1. Health summary ─────────────────────────────────────────── -->
+    <section class="card">
+      <h2 class="section-heading">Health summary</h2>
+      <div class="contributor-grid">
+        <% scoringResult.contributors.forEach(function(c) { %>
+          <div class="contributor-tile contributor-tier-<%= c.tier %>">
+            <div class="contributor-label"><%= c.label %></div>
+            <div class="contributor-value"><%= c.value %></div>
+            <% if (c.note) { %><div class="contributor-note"><%= c.note %></div><% } %>
+            <div class="contributor-bar">
+              <div class="contributor-bar-fill" style="width:<%= Math.round(c.points / c.max * 100) %>%"></div>
+            </div>
+            <div class="contributor-pts"><%= c.points %>&nbsp;/&nbsp;<%= c.max %>&nbsp;pts</div>
+          </div>
+        <% }); %>
+      </div>
+    </section>
+
+    <!-- ── 2. 30-day trends ──────────────────────────────────────────── -->
+    <section class="card">
+      <h2 class="section-heading">30-day trend</h2>
+      <div class="chart-grid">
+        <div class="chart-wrap">
+          <h3 class="chart-title">Event volume</h3>
+          <canvas id="chartVolume" height="160"></canvas>
+        </div>
+        <div class="chart-wrap">
+          <h3 class="chart-title">Match quality &amp; dedupe rate (%)</h3>
+          <canvas id="chartQuality" height="160"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 3. Alerts ─────────────────────────────────────────────────── -->
+    <% if (alerts.length > 0) { %>
+    <section class="card">
+      <h2 class="section-heading">Alerts</h2>
+      <ul class="alert-list">
+        <% alerts.forEach(function(alert) { %>
+          <li class="alert-item alert-<%= alert.severity %>">
+            <div class="alert-header">
+              <span class="alert-severity-badge alert-badge-<%= alert.severity %>"><%= alert.severity.toUpperCase() %></span>
+              <strong class="alert-title"><%= alert.title %></strong>
+            </div>
+            <p class="alert-summary"><%= alert.summary %></p>
+          </li>
+        <% }); %>
+      </ul>
+    </section>
+    <% } %>
+
+    <!-- ── 4. Action list ────────────────────────────────────────────── -->
+    <% if (actions.length > 0) { %>
+    <section class="card">
+      <h2 class="section-heading">Recommended actions</h2>
+      <ol class="action-list">
+        <% actions.forEach(function(action, i) { %>
+          <li class="action-item">
+            <div class="action-header">
+              <span class="action-num"><%= i + 1 %></span>
+              <strong class="action-title"><%= action.title %></strong>
+              <span class="action-badge action-badge-<%= action.severity %>"><%= action.severity %></span>
+            </div>
+            <p class="action-body"><%= action.recommended_action %></p>
+          </li>
+        <% }); %>
+      </ol>
+    </section>
+    <% } %>
+
+    <!-- ── 5a. Signal breakdown ──────────────────────────────────────── -->
+    <section class="card">
+      <h2 class="section-heading">Signal breakdown</h2>
+      <% if (signals.length === 0) { %>
+        <p class="muted">Signal-level data is not available for the current snapshot.</p>
+      <% } else { %>
+        <div class="signal-table-wrap">
+          <table class="signal-table">
+            <thead>
+              <tr>
+                <th>Signal</th>
+                <th>Field name</th>
+                <th>Sent in events</th>
+                <th>Presence rate</th>
+                <th>Match rate</th>
+                <th>Quality</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% signals.forEach(function(s) { %>
+                <tr class="signal-row signal-tone-<%= s.tone %>">
+                  <td class="signal-label"><%= s.label %></td>
+                  <td><code><%= s.signal_name %></code></td>
+                  <td><%= (s.sent_count || 0).toLocaleString() %></td>
+                  <td><%= s.presence_rate_display %></td>
+                  <td><%= s.match_rate_display %></td>
+                  <td>
+                    <span class="quality-pill quality-pill-<%= s.quality_tier %>">
+                      <%= s.quality_tier %>
+                    </span>
+                  </td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </section>
+
+    <!-- ── 5b. Event breakdown ───────────────────────────────────────── -->
+    <section class="card">
+      <h2 class="section-heading">Event breakdown (last snapshot)</h2>
+      <% const breakdownKeys = Object.keys(eventBreakdown); %>
+      <% if (breakdownKeys.length === 0) { %>
+        <p class="muted">No event breakdown data available.</p>
+      <% } else { %>
+        <ul class="breakdown-list">
+          <% const totalEvents = breakdownKeys.reduce(function(sum, k) { return sum + (eventBreakdown[k] || 0); }, 0); %>
+          <% breakdownKeys.forEach(function(k) { %>
+            <% const count = eventBreakdown[k] || 0; %>
+            <% const fracPct = totalEvents > 0 ? Math.round(count / totalEvents * 100) : 0; %>
+            <li class="breakdown-row">
+              <span class="breakdown-name"><%= k %></span>
+              <div class="breakdown-bar-wrap">
+                <div class="breakdown-bar" style="width:<%= fracPct %>%"></div>
+              </div>
+              <span class="breakdown-count"><%= count.toLocaleString() %> (<%= fracPct %>%)</span>
+            </li>
+          <% }); %>
+        </ul>
+      <% } %>
+    </section>
+
+    <% } /* end hasData */ %>
+
+    <!-- ── Footer ────────────────────────────────────────────────────── -->
+    <footer class="page-footer">
+      <p class="muted">Darwin Dashboard · LinkedIn CAPI Health · Data from Holdem ingestion job</p>
+    </footer>
+
+  </main>
+
+  <!-- Chart.js via CDN (no build step required) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script>
+    const LABELS  = <%- chartLabels %>;
+    const VOLUME  = <%- chartVolume %>;
+    const MQ      = <%- chartMatchQuality %>;
+    const DEDUPE  = <%- chartDedupeRate %>;
+
+    function makeChart(id, datasets, opts = {}) {
+      const ctx = document.getElementById(id);
+      if (!ctx) return;
+      new Chart(ctx, {
+        type: 'line',
+        data: { labels: LABELS, datasets },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: 'bottom' } },
+          scales: {
+            x: { ticks: { maxTicksLimit: 8, font: { size: 11 } } },
+            y: { beginAtZero: true, ...opts.y },
+          },
+          elements: { point: { radius: 2 } },
+        },
+      });
+    }
+
+    makeChart('chartVolume', [
+      {
+        label: 'Events',
+        data: VOLUME,
+        borderColor: '#0a66c2',
+        backgroundColor: 'rgba(10,102,194,0.08)',
+        fill: true,
+        tension: 0.3,
+      },
+    ]);
+
+    makeChart('chartQuality', [
+      {
+        label: 'Match quality %',
+        data: MQ,
+        borderColor: '#057642',
+        backgroundColor: 'transparent',
+        tension: 0.3,
+      },
+      {
+        label: 'Dedupe rate %',
+        data: DEDUPE,
+        borderColor: '#915907',
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        borderDash: [4, 3],
+      },
+    ], { y: { max: 100 } });
+  </script>
+</body>
+</html>
