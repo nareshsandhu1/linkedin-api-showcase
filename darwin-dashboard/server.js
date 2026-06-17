@@ -4,7 +4,7 @@ require('dotenv').config();
 const path = require('path');
 const express = require('express');
 const { hasDatabase, ensureSchema, getLatestSnapshot, getSnapshotHistory, getAdvertiser, listAdvertisers } = require('./lib/db');
-const { FIXTURE_ADVERTISER, SNAPSHOT_HISTORY, LATEST_SNAPSHOT, FIXTURE_ADVERTISERS } = require('./lib/fixtures');
+const { FIXTURE_ADVERTISER, SNAPSHOT_HISTORY, LATEST_SNAPSHOT, FIXTURE_CONVERSIONS, FIXTURE_ADVERTISERS } = require('./lib/fixtures');
 const { scoreSnapshot, annotateSignals } = require('./lib/scoring');
 const { generateRecommendations, partitionRecommendations } = require('./lib/recommendations');
 
@@ -21,21 +21,43 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Data helpers — fall back to fixture data when no DB is configured
 // ---------------------------------------------------------------------------
 
+function normaliseAccountId(raw) {
+  const trimmed = String(raw || '').trim();
+  const urnMatch = /urn:li:sponsoredAccount:(\d+)/.exec(trimmed);
+  if (urnMatch) return urnMatch[1];
+  if (/^\d+$/.test(trimmed)) return trimmed;
+  return trimmed; // already a slug or other format
+}
+
+function isFixtureId(id) {
+  return (
+    id === FIXTURE_ADVERTISER.advertiser_id ||
+    id === FIXTURE_ADVERTISER.external_account_id
+  );
+}
+
 async function resolveAdvertiser(advertiserId) {
   if (hasDatabase) return getAdvertiser(advertiserId);
-  if (advertiserId === FIXTURE_ADVERTISER.advertiser_id) return FIXTURE_ADVERTISER;
+  if (isFixtureId(advertiserId)) return FIXTURE_ADVERTISER;
   return null;
 }
 
 async function resolveLatestSnapshot(advertiserId) {
   if (hasDatabase) return getLatestSnapshot(advertiserId);
-  if (advertiserId === FIXTURE_ADVERTISER.advertiser_id) return LATEST_SNAPSHOT;
+  if (isFixtureId(advertiserId)) return LATEST_SNAPSHOT;
   return null;
 }
 
 async function resolveHistory(advertiserId) {
   if (hasDatabase) return getSnapshotHistory(advertiserId, 30);
-  if (advertiserId === FIXTURE_ADVERTISER.advertiser_id) return SNAPSHOT_HISTORY;
+  if (isFixtureId(advertiserId)) return SNAPSHOT_HISTORY;
+  return [];
+}
+
+async function resolveConversions(advertiserId) {
+  // In a real deployment, query a conversions table populated by the ingest job.
+  // For fixture / demo mode, return the static fixture list.
+  if (isFixtureId(advertiserId)) return FIXTURE_CONVERSIONS;
   return [];
 }
 
@@ -48,14 +70,19 @@ async function resolveAdvertiserList() {
 // Routes
 // ---------------------------------------------------------------------------
 
-// Landing: list known advertisers
-app.get('/', async (req, res) => {
-  try {
-    const advertisers = await resolveAdvertiserList();
-    res.render('index', { advertisers });
-  } catch (err) {
-    renderError(res, err);
+// Landing: account ID search form
+app.get('/', (req, res) => {
+  res.render('index', { error: null, prefill: '' });
+});
+
+// Handle search form submission: GET /dashboard?accountId=...
+app.get('/dashboard', (req, res) => {
+  const raw = String(req.query.accountId || '').trim();
+  if (!raw) {
+    return res.render('index', { error: 'Please enter an account ID.', prefill: '' });
   }
+  const id = normaliseAccountId(raw);
+  return res.redirect(`/dashboard/${encodeURIComponent(id)}`);
 });
 
 // Per-advertiser dashboard
@@ -63,16 +90,17 @@ app.get('/dashboard/:advertiserId', async (req, res) => {
   const { advertiserId } = req.params;
 
   try {
-    const [advertiser, latestSnapshot, history] = await Promise.all([
+    const [advertiser, latestSnapshot, history, conversions] = await Promise.all([
       resolveAdvertiser(advertiserId),
       resolveLatestSnapshot(advertiserId),
       resolveHistory(advertiserId),
+      resolveConversions(advertiserId),
     ]);
 
     if (!advertiser) {
-      return res.status(404).render('error', {
-        title: 'Advertiser not found',
-        message: `No advertiser with ID "${advertiserId}" was found.`,
+      return res.render('index', {
+        error: `No advertiser found for account ID "${advertiserId}". Check the ID and try again.`,
+        prefill: advertiserId,
       });
     }
 
@@ -90,7 +118,7 @@ app.get('/dashboard/:advertiserId', async (req, res) => {
         ? latestSnapshot.signal_breakdown
         : []
     );
-    const recommendations = generateRecommendations(latestSnapshot, history, scoringResult);
+    const recommendations = generateRecommendations(latestSnapshot, history, scoringResult, conversions);
     const { alerts, actions } = partitionRecommendations(recommendations);
 
     // Build chart series for the last 30 days
@@ -117,6 +145,7 @@ app.get('/dashboard/:advertiserId', async (req, res) => {
       chartMatchQuality: JSON.stringify(chartMatchQuality),
       chartDedupeRate: JSON.stringify(chartDedupeRate),
       eventBreakdown: latestSnapshot ? (latestSnapshot.event_breakdown || {}) : {},
+      conversions,
     });
   } catch (err) {
     renderError(res, err);

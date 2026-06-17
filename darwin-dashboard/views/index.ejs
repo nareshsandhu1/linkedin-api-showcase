@@ -8,30 +8,52 @@
 </head>
 <body>
   <main class="container">
-    <header>
+    <header class="landing-header">
       <h1>Darwin Dashboard</h1>
-      <p class="subtitle">LinkedIn CAPI integration health &amp; recommendations</p>
+      <p class="subtitle">LinkedIn CAPI integration health, conversion coverage &amp; recommendations</p>
     </header>
 
-    <% if (advertisers.length === 0) { %>
-      <section class="card empty-state">
-        <p class="muted">No advertisers are available yet. Configure a <code>DATABASE_URL</code> and run the ingestion job, or start the app without a database to load the demo advertiser.</p>
-      </section>
-    <% } else { %>
-      <ul class="advertiser-grid">
-        <% advertisers.forEach(function(adv) { %>
-          <li>
-            <a class="advertiser-tile" href="/dashboard/<%= adv.advertiser_id %>">
-              <div class="advertiser-tile-body">
-                <h3><%= adv.advertiser_name %></h3>
-                <p class="advertiser-meta">Account <code><%= adv.external_account_id || adv.advertiser_id %></code></p>
-              </div>
-              <span class="tile-arrow" aria-hidden="true">→</span>
-            </a>
-          </li>
-        <% }); %>
+    <section class="card search-card">
+      <h2>Look up an advertiser</h2>
+      <p class="muted">Enter a LinkedIn ad account ID or sponsored account URN to load the CAPI health dashboard for that advertiser.</p>
+
+      <% if (error) { %>
+        <p class="search-error"><%= error %></p>
+      <% } %>
+
+      <form method="get" action="/dashboard" class="search-form">
+        <label class="search-label" for="accountId">Account ID or URN</label>
+        <div class="search-row">
+          <input
+            id="accountId"
+            type="text"
+            name="accountId"
+            value="<%= prefill %>"
+            placeholder="508833998  or  urn:li:sponsoredAccount:508833998"
+            autocomplete="off"
+            spellcheck="false"
+            required
+            class="search-input"
+          />
+          <button type="submit" class="btn-search">Load dashboard →</button>
+        </div>
+      </form>
+
+      <p class="search-hint muted">
+        Demo mode: enter <strong>508833998</strong> to preview with sample data.
+      </p>
+    </section>
+
+    <section class="card how-card">
+      <h2>What this dashboard shows</h2>
+      <ul class="how-list">
+        <li><strong>Health score</strong> — overall CAPI integration quality based on event volume, match quality, and deduplication.</li>
+        <li><strong>30-day trend</strong> — event volume and match quality over the last 30 days.</li>
+        <li><strong>Conversions</strong> — every conversion rule in the account, its type, enabled status, and whether it is linked to active campaigns.</li>
+        <li><strong>Signal breakdown</strong> — per-field match rates for <code>lifatid</code>, <code>sha256email</code>, <code>ligiantid</code>, <code>axiomid</code>, <code>oracleid</code>, and people match info.</li>
+        <li><strong>Recommendations</strong> — prioritised, actionable suggestions to improve match quality and coverage.</li>
       </ul>
-    <% } %>
+    </section>
   </main>
 </body>
 </html>

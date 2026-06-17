@@ -11,7 +11,7 @@
 
     <!-- ── Top nav ──────────────────────────────────────────────────── -->
     <nav class="topnav topnav-split">
-      <a href="/" class="btn-back">← All advertisers</a>
+      <a href="/" class="btn-back">← Search advertisers</a>
       <span class="window-badge">Last 30 days</span>
     </nav>
 
@@ -94,7 +94,7 @@
     </section>
     <% } %>
 
-    <!-- ── 4. Action list ────────────────────────────────────────────── -->
+    <!-- ── 4. Recommended actions ───────────────────────────────────── -->
     <% if (actions.length > 0) { %>
     <section class="card">
       <h2 class="section-heading">Recommended actions</h2>
@@ -111,9 +111,73 @@
         <% }); %>
       </ol>
     </section>
+    <% } else { %>
+    <section class="card">
+      <h2 class="section-heading">Recommended actions</h2>
+      <p class="muted">No recommendations at this time — integration looks healthy.</p>
+    </section>
     <% } %>
 
-    <!-- ── 5a. Signal breakdown ──────────────────────────────────────── -->
+    <!-- ── 5. Conversions ────────────────────────────────────────────── -->
+    <section class="card">
+      <h2 class="section-heading">Conversions (<%= conversions.length %>)</h2>
+      <% if (conversions.length === 0) { %>
+        <p class="muted">No conversion rules found for this account.</p>
+      <% } else { %>
+        <div class="conv-table-wrap">
+          <table class="conv-table">
+            <thead>
+              <tr>
+                <th>Conversion name</th>
+                <th>Type</th>
+                <th>Enabled</th>
+                <th>Events (window)</th>
+                <th>Last signal</th>
+                <th>Active campaigns</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% conversions.forEach(function(conv) { %>
+                <% const activeCampaigns = (conv.associated_campaigns || []).filter(function(c){ return c.status === 'ACTIVE'; }); %>
+                <% const pausedCampaigns = (conv.associated_campaigns || []).filter(function(c){ return c.status !== 'ACTIVE'; }); %>
+                <% const convRowClass = !conv.isenabled ? 'conv-disabled' : activeCampaigns.length === 0 ? 'conv-warn' : 'conv-ok'; %>
+                <tr class="<%= convRowClass %>">
+                  <td class="conv-name"><%= conv.name %></td>
+                  <td><span class="conv-type-pill"><%= conv.type %></span></td>
+                  <td>
+                    <% if (conv.isenabled) { %>
+                      <span class="conv-status-pill conv-enabled">Enabled</span>
+                    <% } else { %>
+                      <span class="conv-status-pill conv-inactive">Disabled</span>
+                    <% } %>
+                  </td>
+                  <td><%= (conv.event_count || 0).toLocaleString() %></td>
+                  <td class="muted"><%= conv.last_signal_at ? new Date(conv.last_signal_at).toLocaleDateString('en-US', {month:'short',day:'numeric'}) : '—' %></td>
+                  <td>
+                    <% if (activeCampaigns.length > 0) { %>
+                      <ul class="campaign-list">
+                        <% activeCampaigns.forEach(function(ac) { %>
+                          <li><span class="campaign-badge campaign-active">ACTIVE</span> <%= ac.name %></li>
+                        <% }); %>
+                        <% pausedCampaigns.forEach(function(pc) { %>
+                          <li><span class="campaign-badge campaign-paused"><%= pc.status %></span> <%= pc.name %></li>
+                        <% }); %>
+                      </ul>
+                    <% } else if (!conv.isenabled) { %>
+                      <span class="muted">—</span>
+                    <% } else { %>
+                      <span class="conv-no-campaigns">⚠ Not linked to any campaign</span>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </section>
+
+    <!-- ── 6. Signal breakdown ──────────────────────────────────────────── -->
     <section class="card">
       <h2 class="section-heading">Signal breakdown</h2>
       <% if (signals.length === 0) { %>
@@ -152,7 +216,7 @@
       <% } %>
     </section>
 
-    <!-- ── 5b. Event breakdown ───────────────────────────────────────── -->
+    <!-- ── 7. Event breakdown ───────────────────────────────────────────── -->
     <section class="card">
       <h2 class="section-heading">Event breakdown (last snapshot)</h2>
       <% const breakdownKeys = Object.keys(eventBreakdown); %>

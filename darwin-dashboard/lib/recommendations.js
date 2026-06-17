@@ -186,6 +186,27 @@ const RULES = [
     };
   },
 
+  // 9. Enabled conversions with no active campaign associations
+  function conversionsNotLinked(snapshot) {
+    const convs = Array.isArray(snapshot._conversions) ? snapshot._conversions : [];
+    const unlinked = convs.filter((c) => {
+      if (!c.isenabled) return false;
+      const active = (c.associated_campaigns || []).filter((ac) => ac.status === 'ACTIVE');
+      return active.length === 0;
+    });
+    if (unlinked.length === 0) return null;
+    const names = unlinked.map((c) => c.name).join(', ');
+    return {
+      severity: 'warning',
+      title: `${unlinked.length} enabled conversion${unlinked.length > 1 ? 's' : ''} not linked to any active campaign`,
+      summary:
+        `The following enabled conversion rules have no active campaign associations, so LinkedIn cannot use them for attribution or bidding optimisation: ${names}.`,
+      evidence: { unlinked_conversions: unlinked.map((c) => c.name) },
+      recommended_action:
+        'In Campaign Manager, open each affected conversion rule and associate it with at least one active campaign. Conversions not linked to campaigns will not contribute to reporting or optimisation.',
+    };
+  },
+
 ];
 
 // ---------------------------------------------------------------------------
@@ -203,15 +224,19 @@ function avg(arr) {
  * @param {object} snapshot  Latest CAPI snapshot.
  * @param {object[]} history  30-day series.
  * @param {object} scoringResult  Output from scoring.scoreSnapshot().
+ * @param {object[]} conversions  Conversion rules with campaign associations.
  * @returns {object[]}  Top 5 recommendations, sorted by severity.
  */
-function generateRecommendations(snapshot, history, scoringResult) {
+function generateRecommendations(snapshot, history, scoringResult, conversions = []) {
   if (!snapshot) return [];
+
+  // Inject conversions into snapshot so existing rules can access them
+  const snap = { ...snapshot, _conversions: conversions };
 
   const results = RULES
     .map((rule) => {
       try {
-        return rule(snapshot, history, scoringResult);
+        return rule(snap, history, scoringResult);
       } catch {
         return null;
       }

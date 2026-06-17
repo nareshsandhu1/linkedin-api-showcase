@@ -58,12 +58,79 @@ function signalRow(holdemCol, label, sentPct, matchRate) {
 // Holdem column names are used as signal_name so the ingestion script
 // can map directly without any renaming.
 const SIGNAL_BREAKDOWN = [
-  signalRow('lifatid',                              'LinkedIn Click ID (li_fat_id)',            0.61, 0.88),
-  signalRow('sha256email',                          'Email (SHA-256)',                          0.94, 0.72),
+  // lifatid present 61% of events, but match rate only 58% — triggers recommendation
+  signalRow('lifatid',                              'LinkedIn Click ID (li_fat_id)',            0.61, 0.58),
+  // sha256email present 94% of events, match rate 43% — triggers low email match rule
+  signalRow('sha256email',                          'Email (SHA-256)',                          0.94, 0.43),
   signalRow('ligiantid',                            'LinkedIn Giant ID',                        0.28, 0.97),
   signalRow('axiomid',                              'Axiom ID',                                 0.15, 0.91),
   signalRow('oracleid',                             'Oracle ID',                                0.09, 0.89),
   signalRow('conversioneventuserpeoplematchinfo',   'People match info (name / country / lead)', 0.91, null),
+];
+
+// ---------------------------------------------------------------------------
+// Conversion rules with campaign associations
+// ---------------------------------------------------------------------------
+
+const FIXTURE_CONVERSIONS = [
+  {
+    conversionid: '101234567',
+    name: 'HubSpot-Opportunity',
+    type: 'PURCHASE',
+    conversionmethod: 'CONVERSIONS_API',
+    isenabled: true,
+    event_count: 183,
+    last_signal_at: daysAgo(1),
+    associated_campaigns: [
+      { id: '456789', name: 'Brand Awareness Q2 2026', status: 'ACTIVE' },
+      { id: '456790', name: 'Demand Gen — Enterprise', status: 'ACTIVE' },
+    ],
+  },
+  {
+    conversionid: '101234568',
+    name: 'Demo Request',
+    type: 'LEAD',
+    conversionmethod: 'CONVERSIONS_API',
+    isenabled: true,
+    event_count: 412,
+    last_signal_at: daysAgo(0),
+    associated_campaigns: [
+      { id: '456791', name: 'Content Syndication — Mid-Market', status: 'ACTIVE' },
+      { id: '456792', name: 'Retargeting Q2', status: 'PAUSED' },
+    ],
+  },
+  {
+    conversionid: '101234569',
+    name: 'Page View — Pricing',
+    type: 'PAGE_VIEW',
+    conversionmethod: 'CONVERSIONS_API',
+    isenabled: true,
+    event_count: 2847,
+    last_signal_at: daysAgo(0),
+    associated_campaigns: [],   // ⚠ no campaign associations
+  },
+  {
+    conversionid: '101234570',
+    name: 'Free Trial Start',
+    type: 'LEAD',
+    conversionmethod: 'CONVERSIONS_API',
+    isenabled: true,
+    event_count: 94,
+    last_signal_at: daysAgo(3),
+    associated_campaigns: [
+      { id: '456793', name: 'Product-Led Growth', status: 'ACTIVE' },
+    ],
+  },
+  {
+    conversionid: '101234571',
+    name: 'Legacy Lead Capture',
+    type: 'LEAD',
+    conversionmethod: 'CONVERSIONS_API',
+    isenabled: false,
+    event_count: 0,
+    last_signal_at: null,
+    associated_campaigns: [],   // disabled + no campaigns
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -118,5 +185,6 @@ module.exports = {
   SNAPSHOT_HISTORY,
   LATEST_SNAPSHOT,
   SIGNAL_BREAKDOWN,
+  FIXTURE_CONVERSIONS,
   FIXTURE_ADVERTISERS: [FIXTURE_ADVERTISER],
 };
