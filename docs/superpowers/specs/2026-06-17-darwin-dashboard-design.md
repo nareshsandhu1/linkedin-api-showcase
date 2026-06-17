@@ -9,6 +9,7 @@ The dashboard should answer three questions quickly:
 - Is the integration healthy right now?
 - What has happened over the last 30 days?
 - What should we do next to improve it?
+- Which signal parameters are being sent, and how strong is match quality for each?
 
 ## 2. Scope
 
@@ -17,6 +18,7 @@ The dashboard should answer three questions quickly:
 - One advertiser per dashboard view.
 - Default time window: last 30 days.
 - Health summary, 30-day trend, alerts panel, ranked action list, and event breakdown.
+- Signal breakdown with per-parameter match rates.
 - Back end storage for daily or hourly CAPI snapshots.
 - Deterministic health scoring and recommendation rules.
 - Mixed suggestions: rule-based alerts plus short explanatory guidance.
@@ -43,6 +45,8 @@ The primary route should load one advertiser by identifier and render a 30-day v
 
 The dashboard should default to a read-only explanatory experience. The backend is responsible for computing the score and recommendations so the UI stays simple and consistent.
 
+The health score should also explain which individual signals are present in the payload and how well each one matches, including fields such as `li_fat_id`, `email`, `first_name`, `last_name`, `country_code`, and `lead_id`.
+
 ## 4. Core Concepts
 
 ### Advertiser
@@ -61,6 +65,17 @@ The health score is a server-side derived metric that summarizes the integration
 - Match quality.
 - Deduplication rate.
 - Usage/adoption.
+
+The score should be explainable down to the signal level, with per-field match rates and presence counts for the identifiers the advertiser is sending.
+
+### Signal breakdown
+
+Signal breakdown is the per-parameter view of the CAPI payload. For each supported field, the dashboard should show:
+
+- Whether the field is being sent.
+- How often it appears across events.
+- Match rate for that field.
+- Whether it is contributing positively or negatively to the overall health score.
 
 ### Recommendation
 
@@ -109,7 +124,18 @@ This separation keeps data logic server-side and makes the UI easier to reason a
 - `error_count`
 - `warning_count`
 - `event_breakdown`
+- `signal_breakdown`
 - `diagnostic_flags`
+
+### Signal breakdown record
+
+- `signal_name`
+- `sent_count`
+- `match_count`
+- `match_rate`
+- `presence_rate`
+- `quality_tier`
+- `evidence`
 
 ### Recommendation record
 
@@ -145,6 +171,10 @@ Shows the top 3-5 recommendations in priority order, each with a short explanati
 
 Shows the last 30 days of event details by source, type, and dedupe outcome so users can understand where the score comes from.
 
+### Signal breakdown
+
+Shows the per-field metrics for identifiers and event parameters such as `li_fat_id`, `email`, `first_name`, `last_name`, `country_code`, and `lead_id`, including match rate and whether each signal is helping or hurting overall health.
+
 ## 8. Data Flow
 
 1. A scheduled job or ingest process loads advertiser CAPI metrics from the source system.
@@ -152,7 +182,7 @@ Shows the last 30 days of event details by source, type, and dedupe outcome so u
 3. The scoring layer calculates the current health score and derived alerts.
 4. The recommendation engine maps alerts and signal combinations to ranked actions.
 5. The UI requests the advertiser's latest summary and the 30-day series.
-6. The page renders the score, trends, alerts, action list, and event breakdown.
+6. The page renders the score, trends, alerts, action list, event breakdown, and signal breakdown.
 
 The dashboard should not recalculate health in the browser.
 
@@ -162,10 +192,14 @@ The initial scoring system should be deterministic and explainable.
 
 Suggested starting rules:
 
+- Low or missing match rate for high-value identifiers such as `li_fat_id` and `email` lowers the score and produces a recommendation to improve identifier coverage.
+- Missing supporting fields such as `first_name`, `last_name`, or `country_code` should surface as secondary issues when they materially reduce match quality.
 - Low match quality lowers the score and produces a recommendation to improve identifiers and match keys.
 - Falling event volume over the 30-day window lowers the score and produces a recommendation to check coverage and delivery.
 - Low dedupe rate produces a recommendation to verify browser/server deduplication behavior and event IDs.
 - Weak usage/adoption produces a recommendation to increase event coverage or expand implementation sources.
+
+Signal-level recommendations should explain which fields are being sent, which are missing, and which identifiers are carrying the most match value.
 
 Recommendations should be mixed:
 
@@ -213,6 +247,7 @@ Render a simple error state with a retry path and a short explanation. The UI sh
 - Verify the dashboard renders for an advertiser with data.
 - Verify the empty state renders when no snapshots exist.
 - Verify alerts and action list content match the backend response.
+- Verify signal breakdown rows show the expected match rate fields for identifiers.
 
 ## 12. Open Questions
 
