@@ -602,9 +602,18 @@ app.get('/auth/linkedin/callback', async (req, res) => {
       });
     }
     if (!tokenRes.ok || !tokenData.access_token) {
+      const contentType = tokenRes.headers.get('content-type') || '(none)';
       return res.status(tokenRes.status || 502).render('error', {
         title: 'Token exchange failed',
-        message: JSON.stringify(tokenData, null, 2) || '(empty body)',
+        message:
+          `HTTP status: ${tokenRes.status} ${tokenRes.statusText}\n` +
+          `Content-Type: ${contentType}\n` +
+          `Redirect URI sent: ${LINKEDIN_REDIRECT_URI}\n\n` +
+          `Response body:\n${rawToken || '(empty body)'}\n\n` +
+          `An empty body with a 4xx status almost always means the redirect_uri ` +
+          `sent above does not exactly match an Authorized redirect URL on your ` +
+          `LinkedIn app, or the client ID/secret are wrong. A 2xx with no token ` +
+          `means the authorization code was already used — start sign-in again.`,
       });
     }
 
