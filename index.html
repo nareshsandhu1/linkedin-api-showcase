@@ -252,7 +252,16 @@
         var script = document.createElement('script');
         script.async = true;
         var base = serverUrl ? serverUrl.replace(/\/$/, '') : 'https://www.googletagmanager.com';
-        script.src = base + '/gtm.js?id=' + encodeURIComponent(id);
+        // Forward Tag Assistant / GTM preview params so the container loads in
+        // debug mode and can connect back to Tag Assistant (otherwise the
+        // preview handshake times out).
+        var qs = new URLSearchParams(location.search);
+        var src = base + '/gtm.js?id=' + encodeURIComponent(id);
+        ['gtm_auth', 'gtm_preview', 'gtm_debug', 'gtm_cookies_win'].forEach(function (k) {
+          var v = qs.get(k);
+          if (v) src += '&' + k + '=' + encodeURIComponent(v);
+        });
+        script.src = src;
 
         var settled = false;
         function markLoaded(source) {
@@ -363,8 +372,17 @@
       setTimeout(clearContainerInputs, 1000);
       window.addEventListener('pageshow', clearContainerInputs);
 
+      var DEFAULT_GTM_ID = 'GTM-TRQVKJVZ';
       if (params.get('gtm')) $('gtm-id').value = params.get('gtm');
       if (params.get('server')) $('gtm-server').value = params.get('server');
+
+      // Auto-load the container when arriving from Tag Assistant preview
+      // (gtm_debug present) or when a container is supplied via ?gtm=, so the
+      // debug handshake can complete instead of timing out. Fall back to the
+      // known default container for the Tag Assistant preview case.
+      var hasDebugParams = params.get('gtm_debug') || params.get('gtm_preview') || params.get('gtm_auth');
+      if (hasDebugParams && !$('gtm-id').value) $('gtm-id').value = DEFAULT_GTM_ID;
+      if ($('gtm-id').value) loadGTM();
 
       // Ensure the landing URL carries an li_fat_id. Generate a random
       // numeric id if one isn't already present, and update the URL in
