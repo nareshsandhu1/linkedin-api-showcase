@@ -576,17 +576,25 @@ app.get('/auth/linkedin/callback', async (req, res) => {
       redirect_uri: LINKEDIN_REDIRECT_URI,
     });
 
-    const tokenRes = await fetch(TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-    });
+    // Exchange the code with a couple of retries on 5xx, since LinkedIn's
+    // token endpoint occasionally returns transient gateway errors with an
+    // empty body. Retries are safe: the authorization code is unchanged and is
+    // only consumed once the exchange actually succeeds.
+    let tokenRes;
+    let rawToken;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      tokenRes = await fetch(TOKEN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      });
+      // Read the raw text first so we can surface a useful message instead of
+      // throwing "Unexpected end of JSON input" on an empty/non-JSON body.
+      rawToken = await tokenRes.text();
+      if (tokenRes.status < 500 || attempt === 3) break;
+      await new Promise((r) => setTimeout(r, 500 * attempt));
+    }
 
-    // LinkedIn's token endpoint sometimes returns an empty or non-JSON body
-    // (e.g. when the authorization `code` was already used, or on a gateway
-    // error). Read the raw text first so we can surface a useful message
-    // instead of throwing "Unexpected end of JSON input".
-    const rawToken = await tokenRes.text();
     let tokenData;
     try {
       tokenData = rawToken ? JSON.parse(rawToken) : {};
