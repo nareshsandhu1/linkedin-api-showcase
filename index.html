@@ -376,13 +376,15 @@
       if (params.get('gtm')) $('gtm-id').value = params.get('gtm');
       if (params.get('server')) $('gtm-server').value = params.get('server');
 
-      // Auto-load the container when arriving from Tag Assistant preview
-      // (gtm_debug present) or when a container is supplied via ?gtm=, so the
-      // debug handshake can complete instead of timing out. Fall back to the
-      // known default container for the Tag Assistant preview case.
-      var hasDebugParams = params.get('gtm_debug') || params.get('gtm_preview') || params.get('gtm_auth');
-      if (hasDebugParams && !$('gtm-id').value) $('gtm-id').value = DEFAULT_GTM_ID;
-      if ($('gtm-id').value) loadGTM();
+      // Always load a container on page load so the tag fires for real
+      // (non-preview) visits too. Use the explicit ?gtm= value when provided,
+      // otherwise fall back to the known default container. The autofill-clear
+      // above empties the input, so without this default a normal visit would
+      // never load GTM and clicking "fire" would do nothing. Debug params
+      // (gtm_auth/gtm_preview/gtm_debug) are forwarded inside loadGTM() so the
+      // Tag Assistant preview handshake also completes.
+      if (!$('gtm-id').value) $('gtm-id').value = DEFAULT_GTM_ID;
+      loadGTM();
 
       // Ensure the landing URL carries an li_fat_id. Generate a random
       // numeric id if one isn't already present, and update the URL in
