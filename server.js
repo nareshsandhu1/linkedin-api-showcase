@@ -579,7 +579,8 @@ app.get('/auth/linkedin/callback', async (req, res) => {
     // Exchange the code with a couple of retries on 5xx, since LinkedIn's
     // token endpoint occasionally returns transient gateway errors with an
     // empty body. Retries are safe: the authorization code is unchanged and is
-    // only consumed once the exchange actually succeeds.
+    // only consumed once the exchange actually succeeds. We also retry on 429
+    // (rate limiting), which LinkedIn returns intermittently with an empty body.
     let tokenRes;
     let rawToken;
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -591,8 +592,15 @@ app.get('/auth/linkedin/callback', async (req, res) => {
       // Read the raw text first so we can surface a useful message instead of
       // throwing "Unexpected end of JSON input" on an empty/non-JSON body.
       rawToken = await tokenRes.text();
-      if (tokenRes.status < 500 || attempt === 3) break;
-      await new Promise((r) => setTimeout(r, 500 * attempt));
+      const retryable = tokenRes.status >= 500 || tokenRes.status === 429;
+      if (!retryable || attempt === 3) break;
+      // Honor a small Retry-After hint when present, else exponential-ish backoff.
+      const retryAfter = Number(tokenRes.headers.get('retry-after'));
+      const waitMs =
+        Number.isFinite(retryAfter) && retryAfter > 0 && retryAfter <= 5
+          ? retryAfter * 1000
+          : 500 * attempt;
+      await new Promise((r) => setTimeout(r, waitMs));
     }
 
     let tokenData;
@@ -609,6 +617,16 @@ app.get('/auth/linkedin/callback', async (req, res) => {
           `Raw response:\n${rawToken || '(empty body)'}`,
       });
     }
+    if (tokenRes.status === 429) {
+      return res.status(429).render('error', {
+        title: 'LinkedIn is rate limiting sign-in',
+        message:
+          'LinkedIn returned HTTP 429 (Too Many Requests) for the token ' +
+          'exchange. This is a temporary rate limit on LinkedIn’s side — it is ' +
+          'not a configuration problem with this app.\n\n' +
+          'Please wait a few seconds and click “Sign in with LinkedIn” again.',
+      });
+    }
     if (!tokenRes.ok || !tokenData.access_token) {
       const contentType = tokenRes.headers.get('content-type') || '(none)';
       return res.status(tokenRes.status || 502).render('error', {
@@ -618,10 +636,11 @@ app.get('/auth/linkedin/callback', async (req, res) => {
           `Content-Type: ${contentType}\n` +
           `Redirect URI sent: ${LINKEDIN_REDIRECT_URI}\n\n` +
           `Response body:\n${rawToken || '(empty body)'}\n\n` +
-          `An empty body with a 4xx status almost always means the redirect_uri ` +
-          `sent above does not exactly match an Authorized redirect URL on your ` +
-          `LinkedIn app, or the client ID/secret are wrong. A 2xx with no token ` +
-          `means the authorization code was already used — start sign-in again.`,
+          `An empty body with a 400/401 status almost always means the ` +
+          `redirect_uri sent above does not exactly match an Authorized redirect ` +
+          `URL on your LinkedIn app, or the client ID/secret are wrong. A 2xx ` +
+          `with no token means the authorization code was already used — start ` +
+          `sign-in again.`,
       });
     }
 
