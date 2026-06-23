@@ -32,7 +32,21 @@
     return `(year:${Number(m[1])},month:${Number(m[2])},day:${Number(m[3])})`;
   }
 
+  async function sha256Hex(text) {
+    if (!(window.crypto && window.crypto.subtle)) {
+      throw new Error('SHA-256 hashing requires a secure (https) context');
+    }
+    const data = new TextEncoder().encode(text);
+    const digest = await window.crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
   function renderSchemaField(field) {
+    if (field.type === 'heading') {
+      return `<h4 class="try-section">${escape(field.label)}</h4>`;
+    }
     const id = `f_${field.key.replace(/[^a-zA-Z0-9]/g, '_')}`;
     const hint = field.hint
       ? `<p class="muted try-hint">${escape(field.hint)}</p>`
@@ -329,8 +343,9 @@
 
     function refresh() {
       if (isPost) {
-        const built = buildSchemaPayload(form, schema);
-        bodyPreview.value = JSON.stringify(built.body, null, 2);
+        Promise.resolve(buildSchemaPayload(form, schema)).then((built) => {
+          bodyPreview.value = JSON.stringify(built.body, null, 2);
+        });
       } else {
         const { url } = buildUrlFromSchema(form, schema);
         urlInput.value = url;
@@ -351,7 +366,7 @@
 
       let payload;
       if (isPost) {
-        const built = buildSchemaPayload(form, schema);
+        const built = await buildSchemaPayload(form, schema);
         if (built.errors.length) {
           output.innerHTML = `<p class="error">${escape(built.errors.join('; '))}</p>`;
           return;
@@ -388,7 +403,112 @@
     if (schema.bodyShape === 'audienceInsights') {
       return buildAudienceInsightsBody(form, schema);
     }
+    if (schema.bodyShape === 'conversionEvent') {
+      return buildConversionEventBody(form, schema);
+    }
     return { body: {}, errors: ['Unknown bodyShape: ' + schema.bodyShape] };
+  }
+
+  async function buildConversionEventBody(form) {
+    const errors = [];
+    function val(key) {
+      const el = form.querySelector(`[data-key="${key}"][data-ftype]`);
+      return el ? String(el.value || '').trim() : '';
+    }
+
+    const body = {};
+
+    // conversion rule (accept a bare ID or a full URN)
+    let conversion = val('conversion');
+    if (!conversion) {
+      errors.push('Conversion rule is required');
+    } else if (!conversion.startsWith('urn:')) {
+      conversion = `urn:lla:llaPartnerConversion:${conversion}`;
+    }
+    body.conversion = conversion;
+
+    // conversionHappenedAt (epoch ms; blank => now)
+    const tsRaw = val('conversionHappenedAt');
+    if (tsRaw === '') {
+      body.conversionHappenedAt = Date.now();
+    } else if (/^\d+$/.test(tsRaw)) {
+      body.conversionHappenedAt = Number(tsRaw);
+    } else {
+      errors.push('Conversion happened at must be epoch milliseconds');
+    }
+
+    const eventId = val('eventId');
+    if (eventId) body.eventId = eventId;
+
+    // conversionValue (only when an amount is provided)
+    const amount = val('amount');
+    if (amount) {
+      body.conversionValue = {
+        currencyCode: val('currencyCode') || 'USD',
+        amount,
+      };
+    }
+
+    // user identifiers
+    const userIds = [];
+    const email = val('email');
+    if (email) {
+      try {
+        const normalized = email.toLowerCase().replace(/\s+/g, '');
+        const idValue = await sha256Hex(normalized);
+        userIds.push({ idType: 'SHA256_EMAIL', idValue });
+      } catch (err) {
+        errors.push(err.message);
+      }
+    }
+    const liFatId = val('liFatId');
+    if (liFatId) {
+      userIds.push({ idType: 'LINKEDIN_FIRST_PARTY_ADS_TRACKING_UUID', idValue: liFatId });
+    }
+    const acxiomId = val('acxiomId');
+    if (acxiomId) userIds.push({ idType: 'ACXIOM_ID', idValue: acxiomId });
+    const ipAddress = val('ipAddress');
+    if (ipAddress) userIds.push({ idType: 'PLAINTEXT_IP_ADDRESS', idValue: ipAddress });
+    const googleAid = val('googleAid');
+    if (googleAid) userIds.push({ idType: 'GOOGLE_AID', idValue: googleAid });
+
+    const user = { userIds };
+
+    // userInfo (requires both first and last name when present)
+    const firstName = val('firstName');
+    const lastName = val('lastName');
+    const companyName = val('companyName');
+    const title = val('title');
+    const userCountryCode = val('userCountryCode');
+    const hasUserInfo =
+      firstName || lastName || companyName || title || userCountryCode;
+    if (hasUserInfo) {
+      if (!firstName || !lastName) {
+        errors.push('User info requires both first and last name');
+      }
+      const userInfo = {};
+      if (firstName) userInfo.firstName = firstName;
+      if (lastName) userInfo.lastName = lastName;
+      if (companyName) userInfo.companyName = companyName;
+      if (title) userInfo.title = title;
+      if (userCountryCode) userInfo.countryCode = userCountryCode;
+      user.userInfo = userInfo;
+    }
+
+    const lead = val('lead');
+    if (lead) user.lead = lead;
+    const externalId = val('externalId');
+    if (externalId) user.externalIds = [externalId];
+
+    if (userIds.length === 0 && !hasUserInfo && !lead && !externalId) {
+      errors.push(
+        'Provide at least one user identifier (email, click ID, etc.) or user info / lead / external ID'
+      );
+    }
+
+    body.user = user;
+
+    return { body, errors };
   }
 
   // -- Generic free-form editor --------------------------------------------
