@@ -9,7 +9,6 @@
  */
 (function () {
   const PLACEHOLDER_RE = /\{([a-zA-Z][\w]*)\}/g;
-  const URN_RE = /urn:[a-z]+:[^\s:,]+(?::[^\s,)+]+)+/i;
 
   function escape(s) {
     return String(s)
@@ -27,227 +26,6 @@
       .filter(Boolean);
   }
 
-  function decodeMaybe(value) {
-    try {
-      return decodeURIComponent(value);
-    } catch {
-      return value;
-    }
-  }
-
-  function inferUrnPrefix(field) {
-    if (field.urnPrefix) return field.urnPrefix;
-
-    const candidates = [];
-    if (typeof field.default === 'string') candidates.push(field.default);
-    if (typeof field.hint === 'string') candidates.push(field.hint);
-    if (Array.isArray(field.options)) candidates.push(...field.options);
-    if (typeof field.sampleValue === 'string') candidates.push(field.sampleValue);
-
-    for (const candidate of candidates) {
-      const decoded = decodeMaybe(String(candidate || ''));
-      const match = decoded.match(URN_RE);
-      if (match) {
-        const urn = match[0];
-        const lastColon = urn.lastIndexOf(':');
-        if (lastColon !== -1) return urn.slice(0, lastColon + 1);
-      }
-    }
-    return '';
-  }
-
-  function extractIdFromValue(value, prefix) {
-    const decoded = decodeMaybe(String(value || '').trim());
-    if (!decoded) return '';
-    if (prefix && decoded.startsWith(prefix)) return decoded.slice(prefix.length);
-    if (/^urn:/i.test(decoded)) {
-      const idx = decoded.lastIndexOf(':');
-      return idx === -1 ? decoded : decoded.slice(idx + 1);
-    }
-    return decoded;
-  }
-
-  function toUrnValue(value, prefix) {
-    const trimmed = String(value || '').trim();
-    if (!trimmed) return '';
-    const decoded = decodeMaybe(trimmed);
-    if (/^urn:/i.test(decoded) || !prefix) return decoded;
-    return `${prefix}${decoded}`;
-  }
-
-  function parseIdList(text, prefix) {
-    return parseUrnList(text).map((value) => toUrnValue(value, prefix));
-  }
-
-  function parseJson(text) {
-    try {
-      return JSON.parse(text);
-    } catch {
-      return null;
-    }
-  }
-
-  function labelToId(label) {
-    return String(label || '')
-      .replace(/\bURNs\b/g, 'IDs')
-      .replace(/\bURN\b/g, 'ID');
-  }
-
-  function valueToFriendlyLabel(value) {
-    const decoded = decodeMaybe(String(value || ''));
-    if (/^urn:/i.test(decoded)) return extractIdFromValue(decoded, inferUrnPrefix({ sampleValue: decoded }));
-    return decoded;
-  }
-
-  function placeholderLabel(name) {
-    return String(name || '')
-      .replace(/Urn$/i, ' ID')
-      .replace(/Id$/i, ' ID')
-      .replace(/Ids$/i, ' IDs')
-      .replace(/([a-z])([A-Z])/g, '$1 $2')
-      .replace(/^./, (char) => char.toUpperCase());
-  }
-
-  function humanizeUrnPrefix(prefix) {
-    const trimmed = String(prefix || '').replace(/:$/, '');
-    const segments = trimmed.split(':');
-    const urnType = segments[segments.length - 1] || '';
-    if (!urnType) return '';
-
-    return urnType
-      .replace(/([a-z])([A-Z])/g, '$1 $2')
-      .replace(/^./, (char) => char.toUpperCase());
-  }
-
-  function isSimpleObject(value) {
-    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-  }
-
-  function collectBodyHelperFields(value, path = []) {
-    const fields = [];
-    if (Array.isArray(value)) {
-      value.forEach((item, index) => {
-        fields.push(...collectBodyHelperFields(item, path.concat(index)));
-      });
-      return fields;
-    }
-    if (!isSimpleObject(value)) {
-      if (typeof value === 'string') {
-        const prefix = inferUrnPrefix({ sampleValue: value });
-        if (prefix) {
-          const key = String(path[path.length - 1] || 'value');
-          const prefixLabel = humanizeUrnPrefix(prefix);
-          fields.push({
-            path,
-            key,
-            label: prefixLabel ? `${prefixLabel} ID` : placeholderLabel(key),
-            urnPrefix: prefix,
-            sampleValue: value,
-          });
-        }
-      }
-      return fields;
-    }
-
-    Object.keys(value).forEach((key) => {
-      fields.push(...collectBodyHelperFields(value[key], path.concat(key)));
-    });
-    return fields;
-  }
-
-  function getNestedValue(source, path) {
-    return path.reduce((current, key) => (current == null ? current : current[key]), source);
-  }
-
-  function setNestedValue(source, path, nextValue) {
-    const clone = Array.isArray(source) ? source.slice() : { ...source };
-    let cursor = clone;
-
-    for (let index = 0; index < path.length - 1; index += 1) {
-      const key = path[index];
-      const existing = cursor[key];
-      cursor[key] = Array.isArray(existing) ? existing.slice() : { ...existing };
-      cursor = cursor[key];
-    }
-
-    cursor[path[path.length - 1]] = nextValue;
-    return clone;
-  }
-
-  function renderBodyHelperFields(sampleBody) {
-    const parsed = parseJson(sampleBody);
-    if (!parsed) return '';
-
-    const fields = collectBodyHelperFields(parsed);
-    if (!fields.length) return '';
-
-    return `
-      <section class="try-helper-box" data-body-helpers="true">
-        <h3>Request details</h3>
-        <p class="muted">Enter only the IDs you know. The full LinkedIn values are added automatically.</p>
-        <div class="try-placeholder-grid">
-          ${fields
-            .map((field, index) => {
-              const idValue = extractIdFromValue(field.sampleValue, field.urnPrefix);
-              return `
-                <label class="try-label" for="b_${index}">${escape(field.label)}
-                  <input id="b_${index}" type="text" data-body-field-index="${index}"
-                         data-body-path="${escape(JSON.stringify(field.path))}"
-                         data-urn-prefix="${escape(field.urnPrefix)}"
-                         value="${escape(idValue)}" placeholder="Enter the ID only" spellcheck="false" />
-                </label>`;
-            })
-            .join('')}
-        </div>
-      </section>`;
-  }
-
-  function buildBodyFromHelpers(form, sampleBody) {
-    const parsed = parseJson(sampleBody);
-    if (!parsed) return { body: null, errors: [] };
-
-    let nextBody = parsed;
-    const errors = [];
-    const inputs = form.querySelectorAll('[data-body-path]');
-
-    inputs.forEach((input) => {
-      const path = JSON.parse(input.dataset.bodyPath || '[]');
-      const prefix = input.dataset.urnPrefix || '';
-      const rawValue = input.value.trim();
-      const label = input.closest('.try-label')?.textContent?.trim() || 'Field';
-      const currentValue = getNestedValue(nextBody, path);
-
-      if (!rawValue) {
-        errors.push(`${label} is required`);
-        return;
-      }
-
-      if (typeof currentValue === 'string') {
-        nextBody = setNestedValue(nextBody, path, toUrnValue(rawValue, prefix));
-      }
-    });
-
-    return { body: nextBody, errors };
-  }
-
-  function escapeRegex(text) {
-    return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-
-  function derivePlaceholderSamples(urlTemplate, sampleUrl) {
-    const names = [...urlTemplate.matchAll(PLACEHOLDER_RE)].map((match) => match[1]);
-    if (!names.length || !sampleUrl) return [];
-
-    const pattern = escapeRegex(urlTemplate).replace(/\\\{([a-zA-Z][\w]*)\\\}/g, '([^&#?]+)');
-    const match = new RegExp(`^${pattern}$`).exec(sampleUrl);
-    if (!match) return names.map((name) => ({ name, sampleValue: '' }));
-
-    return names.map((name, index) => ({
-      name,
-      sampleValue: decodeMaybe(match[index + 1] || ''),
-    }));
-  }
-
   function fmtDateTuple(yyyyMmDd) {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(yyyyMmDd || '').trim());
     if (!m) return null;
@@ -256,16 +34,8 @@
 
   function renderSchemaField(field) {
     const id = `f_${field.key.replace(/[^a-zA-Z0-9]/g, '_')}`;
-    const urnPrefix = inferUrnPrefix(field);
-    const friendlyLabel = labelToId(field.label);
-    const friendlyHint = field.hint
-      ? field.hint
-          .replace(/urn:[^\s,.)]+/gi, (value) => extractIdFromValue(value, inferUrnPrefix({ sampleValue: value })))
-          .replace(/\bURNs\b/g, 'IDs')
-          .replace(/\bURN\b/g, 'ID')
-      : '';
-    const hint = friendlyHint
-      ? `<p class="muted try-hint">${escape(friendlyHint)}</p>`
+    const hint = field.hint
+      ? `<p class="muted try-hint">${escape(field.hint)}</p>`
       : '';
     if (field.type === 'select') {
       const opts = field.options
@@ -273,11 +43,11 @@
           (o) =>
             `<option value="${escape(o)}"${
               o === field.default ? ' selected' : ''
-            }>${escape(valueToFriendlyLabel(o))}</option>`
+            }>${escape(o)}</option>`
         )
         .join('');
       return `
-        <label class="try-label" for="${id}">${escape(friendlyLabel)}
+        <label class="try-label" for="${id}">${escape(field.label)}
           <select id="${id}" data-key="${escape(field.key)}" data-ftype="select">${opts}</select>
         </label>${hint}`;
     }
@@ -285,7 +55,7 @@
       const minAttr = field.min != null ? ` min="${field.min}"` : '';
       const maxAttr = field.max != null ? ` max="${field.max}"` : '';
       return `
-        <label class="try-label" for="${id}">${escape(friendlyLabel)}
+        <label class="try-label" for="${id}">${escape(field.label)}
           <input id="${id}" data-key="${escape(field.key)}" data-ftype="number"
                  type="number"${minAttr}${maxAttr}
                  value="${escape(field.default != null ? field.default : '')}" />
@@ -295,7 +65,7 @@
       const d = field.defaults || {};
       return `
         <fieldset class="try-fieldset" data-key="${escape(field.key)}" data-ftype="dateRange">
-          <legend>${escape(friendlyLabel)}</legend>
+          <legend>${escape(field.label)}</legend>
           <label class="try-label-inline">Start
             <input type="date" data-role="start" value="${escape(d.start || '')}" />
           </label>
@@ -305,14 +75,11 @@
         </fieldset>${hint}`;
     }
     if (field.type === 'urnList') {
-      const defaultValue = parseUrnList(field.default || '')
-        .map((value) => extractIdFromValue(value, urnPrefix))
-        .join('\n');
       return `
-        <label class="try-label" for="${id}">${escape(friendlyLabel)}
+        <label class="try-label" for="${id}">${escape(field.label)}
           <textarea id="${id}" data-key="${escape(field.key)}" data-ftype="urnList"
                     rows="2" spellcheck="false"
-                    placeholder="Enter one ID per line">${escape(defaultValue)}</textarea>
+                    placeholder="urn:li:sponsoredAccount:506336348">${escape(field.default || '')}</textarea>
         </label>${hint}`;
     }
     if (field.type === 'checkboxes') {
@@ -324,25 +91,21 @@
               <input type="checkbox" value="${escape(o)}"${
                 defaults.has(o) ? ' checked' : ''
               } />
-              <span>${escape(valueToFriendlyLabel(o))}</span>
+              <span>${escape(o)}</span>
             </label>`
         )
         .join('');
       return `
         <fieldset class="try-fieldset" data-key="${escape(field.key)}" data-ftype="checkboxes">
-          <legend>${escape(friendlyLabel)}</legend>
+          <legend>${escape(field.label)}</legend>
           <div class="try-checkbox-grid">${boxes}</div>
         </fieldset>${hint}`;
     }
     // text fallback
-    const textValue = urnPrefix
-      ? extractIdFromValue(field.default || '', urnPrefix)
-      : field.default || '';
     return `
-      <label class="try-label" for="${id}">${escape(friendlyLabel)}
+      <label class="try-label" for="${id}">${escape(field.label)}
         <input id="${id}" data-key="${escape(field.key)}" data-ftype="text"
-               type="text" value="${escape(textValue)}" spellcheck="false"
-               placeholder="${escape(urnPrefix ? 'Enter the ID only' : '')}" />
+               type="text" value="${escape(field.default || '')}" spellcheck="false" />
       </label>${hint}`;
   }
 
@@ -350,6 +113,9 @@
     const params = [];
     const errors = [];
     const facetClauses = [];
+    // Composite Rest.li params (e.g. filterCriteria=(lookbackWindow:...,campaign:...)).
+    // Keyed by group name; each entry is an array of `key:value` clause strings.
+    const groups = {};
 
     function addParam(key, value) {
       if (value === '' || value == null) return;
@@ -365,7 +131,7 @@
       // Collect selected values for this field (for facet aggregation).
       let selected = [];
       if (field.type === 'urnList') {
-        selected = parseIdList(wrap.value, inferUrnPrefix(field));
+        selected = parseUrnList(wrap.value);
       } else if (field.type === 'checkboxes') {
         selected = Array.from(
           wrap.querySelectorAll('input[type="checkbox"]:checked')
@@ -384,6 +150,29 @@
         facetClauses.push(
           `(or:(${field.facetUrn}:List(${selected.join(',')})))`
         );
+        return;
+      }
+
+      // Group fields are assembled into a single composite param such as
+      // `filterCriteria=(lookbackWindow:LAST_90_DAYS,adSegments:List(...))`.
+      if (field.group) {
+        let clause = null;
+        if (field.type === 'urnList') {
+          if (selected.length === 0) {
+            if (field.required) errors.push(`${field.label} is required`);
+            return;
+          }
+          const list = selected.map((u) => encodeURIComponent(u)).join(',');
+          clause = `${field.key}:List(${list})`;
+        } else {
+          const raw = String(wrap.value || '').trim();
+          if (raw === '') {
+            if (field.required) errors.push(`${field.label} is required`);
+            return;
+          }
+          clause = `${field.key}:${encodeURIComponent(raw)}`;
+        }
+        (groups[field.group] = groups[field.group] || []).push(clause);
         return;
       }
 
@@ -415,8 +204,7 @@
         }
         params.push(`${encodeURIComponent(field.key)}=${selected.join(',')}`);
       } else {
-        const value = toUrnValue(wrap.value, inferUrnPrefix(field));
-        addParam(field.key, encodeURIComponent(value));
+        addParam(field.key, encodeURIComponent(wrap.value));
       }
     });
 
@@ -425,6 +213,13 @@
         `targetingCriteria=(include:(and:List(${facetClauses.join(',')})))`
       );
     }
+
+    Object.keys(groups).forEach((name) => {
+      const clauses = groups[name];
+      if (clauses.length) {
+        params.push(`${encodeURIComponent(name)}=(${clauses.join(',')})`);
+      }
+    });
 
     return { url: `${schema.baseUrl}?${params.join('&')}`, errors };
   }
@@ -436,7 +231,7 @@
       `[data-key="${field.key}"][data-ftype]`
     );
     if (!wrap) return null;
-    if (field.type === 'urnList') return parseIdList(wrap.value, inferUrnPrefix(field));
+    if (field.type === 'urnList') return parseUrnList(wrap.value);
     if (field.type === 'checkboxes') {
       return Array.from(
         wrap.querySelectorAll('input[type="checkbox"]:checked')
@@ -446,7 +241,7 @@
       const v = wrap.value === '' ? null : Number(wrap.value);
       return Number.isFinite(v) ? v : null;
     }
-    return toUrnValue(wrap.value, inferUrnPrefix(field));
+    return wrap.value;
   }
 
   function buildAudienceInsightsBody(form, schema) {
@@ -598,74 +393,21 @@
 
   // -- Generic free-form editor --------------------------------------------
 
-  function buildUrlFromTemplate(urlTemplate, form) {
-    const errors = [];
-    const nextUrl = urlTemplate.replace(PLACEHOLDER_RE, (_, name) => {
-      const input = form.querySelector(`[data-placeholder-name="${name}"]`);
-      if (!input) return `{${name}}`;
-      const prefix = input.dataset.urnPrefix || '';
-      const value = toUrnValue(input.value, prefix);
-      if (!value) {
-        errors.push(`${placeholderLabel(name)} is required`);
-        return `{${name}}`;
-      }
-      return encodeURIComponent(value);
-    });
-    return { url: nextUrl, errors };
-  }
-
-  function renderPlaceholderFields(urlTemplate, sampleUrl) {
-    const samples = derivePlaceholderSamples(urlTemplate, sampleUrl);
-    if (!samples.length) return '';
-
-    return `
-      <section class="try-helper-box">
-        <h3>Required IDs</h3>
-        <p class="muted">Enter only the ID. The full LinkedIn value is built for you.</p>
-        <div class="try-placeholder-grid">
-          ${samples
-            .map(({ name, sampleValue }) => {
-              const prefix = inferUrnPrefix({ sampleValue });
-              const idValue = extractIdFromValue(sampleValue, prefix);
-              return `
-                <label class="try-label" for="p_${escape(name)}">${escape(placeholderLabel(name))}
-                  <input id="p_${escape(name)}" type="text" data-placeholder-name="${escape(name)}"
-                         data-urn-prefix="${escape(prefix)}" value="${escape(idValue)}"
-                         placeholder="Enter the ID only" spellcheck="false" />
-                </label>`;
-            })
-            .join('')}
-        </div>
-      </section>`;
-  }
-
-  function renderGenericForm(target, method, urlTemplate, sampleUrl, sampleBody) {
+  function renderGenericForm(target, method, urlTemplate, sampleBody) {
     const hasBody = method !== 'GET';
-    const hasPlaceholders = PLACEHOLDER_RE.test(urlTemplate);
-    const hasBodyHelpers = Boolean(renderBodyHelperFields(sampleBody));
-    PLACEHOLDER_RE.lastIndex = 0;
     target.innerHTML = `
       <form class="try-form">
-        ${
-          hasPlaceholders
-            ? renderPlaceholderFields(urlTemplate, sampleUrl)
-            : ''
-        }
         <label class="try-label">Request URL
-          <input type="text" class="try-url" value="${escape(sampleUrl)}" ${
-            hasPlaceholders ? 'readonly' : ''
-          } spellcheck="false" />
+          <input type="text" class="try-url" value="${escape(urlTemplate)}" spellcheck="false" />
         </label>
         <p class="muted try-hint">
-          Review the full request before sending. You only need the specific ID values.
+          Replace placeholders like <code>{urn}</code> with real values
+          (e.g. <code>urn:li:organization:2414183</code>).
         </p>
-        ${hasBody ? renderBodyHelperFields(sampleBody) : ''}
         ${
           hasBody
             ? `<label class="try-label">Request body (JSON)
-                 <textarea class="try-body" rows="10" ${
-                   hasBodyHelpers ? 'readonly' : ''
-                 } spellcheck="false">${escape(sampleBody)}</textarea>
+                 <textarea class="try-body" rows="10" spellcheck="false">${escape(sampleBody)}</textarea>
                </label>`
             : ''
         }
@@ -679,25 +421,6 @@
 
     const form = target.querySelector('.try-form');
     const output = target.querySelector('.try-output');
-    const urlInput = form.querySelector('.try-url');
-    const bodyEl = form.querySelector('.try-body');
-
-    function refreshUrl() {
-      if (!hasPlaceholders) return;
-      const built = buildUrlFromTemplate(urlTemplate, form);
-      urlInput.value = built.url;
-    }
-    function refreshBody() {
-      if (!hasBodyHelpers || !bodyEl) return;
-      const built = buildBodyFromHelpers(form, sampleBody);
-      if (built.body) {
-        bodyEl.value = JSON.stringify(built.body, null, 2);
-      }
-    }
-    refreshUrl();
-    refreshBody();
-    form.addEventListener('input', refreshUrl);
-    form.addEventListener('input', refreshBody);
 
     target.querySelector('.btn-cancel').addEventListener('click', () => {
       target.hidden = true;
@@ -706,12 +429,8 @@
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const builtUrl = hasPlaceholders ? buildUrlFromTemplate(urlTemplate, form) : null;
-      if (builtUrl && builtUrl.errors.length) {
-        output.innerHTML = `<p class="error">${escape(builtUrl.errors.join('; '))}</p>`;
-        return;
-      }
       const url = form.querySelector('.try-url').value.trim();
+      const bodyEl = form.querySelector('.try-body');
       const submitBtn = form.querySelector('button[type="submit"]');
 
       if (PLACEHOLDER_RE.test(url)) {
@@ -723,20 +442,11 @@
 
       const payload = { method, url };
       if (hasBody && bodyEl && bodyEl.value.trim()) {
-        if (hasBodyHelpers) {
-          const builtBody = buildBodyFromHelpers(form, sampleBody);
-          if (builtBody.errors.length) {
-            output.innerHTML = `<p class="error">${escape(builtBody.errors.join('; '))}</p>`;
-            return;
-          }
-          payload.body = builtBody.body;
-        } else {
-          try {
-            payload.body = JSON.parse(bodyEl.value);
-          } catch (err) {
-            output.innerHTML = `<p class="error">Invalid JSON body: ${escape(err.message)}</p>`;
-            return;
-          }
+        try {
+          payload.body = JSON.parse(bodyEl.value);
+        } catch (err) {
+          output.innerHTML = `<p class="error">Invalid JSON body: ${escape(err.message)}</p>`;
+          return;
         }
       }
 
@@ -788,8 +498,7 @@
 
   function openEditor(button) {
     const method = button.dataset.method;
-    const urlTemplate = button.dataset.urlTemplate || button.dataset.url;
-    const sampleUrl = button.dataset.url;
+    const urlTemplate = button.dataset.url;
     const sampleBody = button.dataset.sampleBody || '';
     const target = document.getElementById(button.dataset.target);
     target.hidden = false;
@@ -804,7 +513,7 @@
         // fall through to generic editor on parse error
       }
     }
-    renderGenericForm(target, method, urlTemplate, sampleUrl, sampleBody);
+    renderGenericForm(target, method, urlTemplate, sampleBody);
   }
 
   document.addEventListener('click', (e) => {
