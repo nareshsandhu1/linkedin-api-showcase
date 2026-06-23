@@ -1,8 +1,12 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
 #
 # Provisions:
-#   1. A free Postgres database (linkedin-api-showcase-db)
-#   2. A free Node.js web service (linkedin-api-showcase) wired to that DB
+#   1. A free Node.js web service (linkedin-api-showcase)
+#
+# Sessions and LinkedIn tokens are kept in-memory (no database). They do not
+# survive a service restart, which is fine for this showcase app. To re-enable
+# Postgres persistence, restore a `databases:` block and a DATABASE_URL env var
+# wired with `fromDatabase`.
 #
 # After Render assigns the web service a URL like
 #   https://linkedin-api-showcase.onrender.com
@@ -10,12 +14,6 @@
 #   https://linkedin-api-showcase.onrender.com/auth/linkedin/callback
 # and add that exact URL to your LinkedIn app's "Authorized redirect URLs"
 # under https://www.linkedin.com/developers/apps.
-
-databases:
-  - name: linkedin-api-showcase-db
-    plan: free
-    databaseName: linkedin_api_showcase
-    user: linkedin_api_showcase
 
 services:
   - type: web
@@ -29,10 +27,6 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: linkedin-api-showcase-db
-          property: connectionString
       - key: LINKEDIN_CLIENT_ID
         sync: false        # set in Render dashboard (kept secret)
       - key: LINKEDIN_CLIENT_SECRET
